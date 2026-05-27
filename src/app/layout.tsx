@@ -13,9 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Phi — Upload your notes. Phi teaches you.",
-  description:
-    "An AI-powered academic learning platform that turns your own material into structured lessons, read-along audio, and active recall.",
+  title: "Phi",
+  description: "AI for Human Intelligence",
 };
 
 export default function RootLayout({

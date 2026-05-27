@@ -376,15 +376,13 @@ export default function LessonView({ chunks, source }: Props) {
       <aside
         className="
           flex flex-col border-t border-white/10 bg-surface
-          lg:h-screen lg:w-1/3 lg:sticky lg:top-0 lg:border-l lg:border-t-0
+          lg:h-[calc(100vh-4rem)] lg:w-1/3 lg:sticky lg:top-16 lg:border-l lg:border-t-0
         "
       >
         {/* Header */}
         <div className="flex items-center gap-2 border-b border-white/10 px-5 py-4">
-          <span aria-hidden="true" className="text-base font-light leading-none text-accent">
-            φ
-          </span>
-          <h2 className="text-sm font-medium text-muted">Ask Phi</h2>
+          <span aria-hidden="true" className="text-xs leading-none text-accent">✦</span>
+          <h2 className="text-sm font-medium text-muted">Ask</h2>
         </div>
 
         {/* Message list — the only scrollable region. `flex-1` lets it eat the
@@ -407,12 +405,27 @@ export default function LessonView({ chunks, source }: Props) {
                   </p>
                 </div>
               ) : (
-                // Assistant: left-aligned, no bubble — the contrast with the
-                // surface bg is enough. Empty content (mid-stream, before the
-                // first token) shows a small pulsing placeholder.
+                // Assistant: left-aligned, markdown-rendered. Same ReactMarkdown
+                // used for the lesson, but with lighter chat-appropriate styles
+                // (tighter spacing, smaller code blocks). Empty content while
+                // streaming shows a pulsing placeholder.
                 <div key={i} className="text-sm leading-relaxed text-text">
                   {m.content.length > 0 ? (
-                    m.content
+                    <div
+                      className="
+                        [&_p]:my-1 [&_p]:text-sm [&_p]:leading-relaxed
+                        [&_strong]:font-semibold [&_em]:italic
+                        [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4
+                        [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4
+                        [&_li]:my-0.5
+                        [&_code]:rounded [&_code]:bg-background [&_code]:px-1 [&_code]:py-px [&_code]:font-mono [&_code]:text-xs [&_code]:text-accent
+                        [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-background [&_pre]:p-3
+                        [&_pre_code]:bg-transparent [&_pre_code]:p-0
+                        [&_blockquote]:border-l-2 [&_blockquote]:border-accent/40 [&_blockquote]:pl-3 [&_blockquote]:text-muted [&_blockquote]:italic
+                      "
+                    >
+                      <ReactMarkdown>{m.content}</ReactMarkdown>
+                    </div>
                   ) : (
                     <span className="text-muted animate-pulse">Phi is thinking…</span>
                   )}
@@ -440,7 +453,7 @@ export default function LessonView({ chunks, source }: Props) {
                   sendMessage();
                 }
               }}
-              rows={1}
+              rows={3}
               disabled={isChatLoading}
               placeholder="Ask Phi anything…"
               aria-label="Ask Phi a question about this lesson"
@@ -457,7 +470,7 @@ export default function LessonView({ chunks, source }: Props) {
               disabled={isChatLoading || chatInput.trim().length === 0}
               aria-label="Send message"
               className="
-                shrink-0 rounded-xl bg-accent px-3.5 py-2.5 text-sm font-medium text-background
+                cursor-pointer shrink-0 rounded-xl bg-accent px-3.5 py-2.5 text-sm font-medium text-background
                 transition-colors hover:bg-[#e2bb68]
                 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent
               "
