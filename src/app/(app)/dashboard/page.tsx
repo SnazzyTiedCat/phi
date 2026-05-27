@@ -59,17 +59,31 @@ export default async function DashboardPage() {
   const hasSources = sources.length > 0;
 
   // ── Fetch which sources already have a cached lesson ──────────────────────
-  // A lesson row exists once the API route generates and saves one. We use this
-  // to show "Continue learning" (gold, inviting) vs "Start learning" (muted,
-  // not-yet-done) on each card.
+  // A lesson row exists once /api/lesson generates and saves one. We use this
+  // to show "Continue learning" (gold) vs "Start learning" (muted) per card.
   const { data: lessonRows } = await supabase
     .from("lessons")
     .select("source_name")
     .eq("user_id", user?.id ?? "");
 
+  // Normalise source_names on both sides before comparing. The lessons table
+  // may have been written before the decodeURIComponent fix in the API route,
+  // meaning some rows have encoded names ("my%20notes.pdf") while the chunks
+  // table always stores the raw filename ("my notes.pdf"). Decoding both sides
+  // makes the Set lookup reliable regardless of what was previously stored.
+  // decodeURIComponent throws on malformed sequences (e.g. a lone "%") so we
+  // catch and fall back to the original string.
+  function normalise(s: string) {
+    try { return decodeURIComponent(s); } catch { return s; }
+  }
+
   const cachedSources = new Set(
-    (lessonRows ?? []).map((row: { source_name: string }) => row.source_name),
+    (lessonRows ?? []).map((row: { source_name: string }) => normalise(row.source_name)),
   );
+
+  // Normalise the sources array too, so the has() comparison is always
+  // decoded-vs-decoded.
+  const normalisedSources = sources.map(normalise);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
@@ -115,7 +129,7 @@ export default async function DashboardPage() {
            1 column on mobile, 2 on small screens, 3 on large — so cards stay a
            comfortable width instead of stretching edge-to-edge. */
         <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {sources.map((source) => (
+          {normalisedSources.map((source) => (
             /* The whole card is the link — a larger, more forgiving click
                target than a small button, and the natural mental model is
                "tap the subject to open it." Solid border (vs. the dashed

@@ -115,7 +115,7 @@ export async function POST(request: Request) {
   //    chunks / lessons tables (plain filename) and what arrives here. Decoding
   //    once is idempotent for already-decoded strings ("my notes.pdf" → same),
   //    and fixes the mismatch when the string is still encoded.
-  const normalisedSource = decodeURIComponent(source);
+  const normalisedSource = decodeURIComponent(source.replace(/\+/g, " "));
 
   // 4a) Cache check. If we've already generated a lesson for this user + source,
   //     return it immediately — no Anthropic call, no token spend.
