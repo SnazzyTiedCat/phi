@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { PDFParse } from "pdf-parse";
+import { extractText } from "unpdf";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * POST /api/upload
@@ -15,9 +16,9 @@ import { PDFParse } from "pdf-parse";
  * a GET to this URL would 405 automatically because we don't export `GET`.
  */
 
-// Force the Node.js runtime (not Edge). `pdf-parse` sits on top of pdfjs-dist,
-// which needs Node APIs (Buffers, etc.). The Edge runtime is a stripped-down
-// environment and would throw at import time. This export is how you opt in.
+// Force the Node.js runtime (not Edge). `unpdf` uses pdfjs-dist under the hood,
+// which needs Node APIs. The Edge runtime is a stripped-down environment and
+// would throw at import time. This export is how you opt in.
 export const runtime = "nodejs";
 
 // --- Chunking knobs ---------------------------------------------------------
@@ -77,25 +78,12 @@ function chunkText(text: string): string[] {
   return chunks;
 }
 
-/**
- * Pull the raw text out of a PDF buffer using pdf-parse v2.
- *
- * pdf-parse v2 exposes a `PDFParse` class (v1 was a single function — a lot of
- * tutorials online still show the old API, so don't be confused if examples
- * look different). The flow is: construct with the binary `data`, call
- * `getText()`, read the concatenated `.text`, then `destroy()` to free the
- * underlying pdfjs document so we don't leak resources across requests.
- */
+// Pull the raw text out of a PDF buffer using unpdf.
+// `mergePages: true` concatenates all pages into one string so the chunker
+// sees the full document rather than per-page fragments.
 async function extractPdfText(data: Uint8Array): Promise<string> {
-  const parser = new PDFParse({ data });
-  try {
-    const result = await parser.getText();
-    return result.text;
-  } finally {
-    // Always release the document, even if getText() throws. `finally` runs on
-    // both the success and error paths, which is exactly what we want here.
-    await parser.destroy();
-  }
+  const { text } = await extractText(data, { mergePages: true });
+  return text;
 }
 
 export async function POST(request: Request) {
@@ -152,7 +140,7 @@ export async function POST(request: Request) {
       // dependency-free way to turn raw bytes into a string.
       text = new TextDecoder("utf-8").decode(arrayBuffer);
     } else {
-      // PDF: hand the bytes to pdf-parse as a Uint8Array (its preferred input).
+      // PDF: hand the bytes to unpdf as a Uint8Array.
       text = await extractPdfText(new Uint8Array(arrayBuffer));
     }
   } catch {
@@ -175,9 +163,43 @@ export async function POST(request: Request) {
     );
   }
 
-  // 7) Chunk and return. `count` is redundant with `chunks.length` but is
-  //    convenient for the client (and for logging) so it doesn't have to
-  //    derive it.
+  // 7) Chunk.
   const chunks = chunkText(text);
-  return NextResponse.json({ chunks, count: chunks.length });
+
+  // 8) Authenticate. Route handlers don't go through the (app) layout, so we
+  //    must verify the session ourselves. getUser() validates against Supabase's
+  //    auth server (not just a local cookie), so it's the trustworthy check.
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  // 9) Persist to Supabase. Each chunk becomes one row in the `chunks` table.
+  //    The `embedding` column is vector(1536). We store a zero vector now as a
+  //    placeholder — the shape is correct so the column accepts it, and real
+  //    embeddings can be back-filled later without a schema change. pgvector
+  //    reads the vector from PostgREST as a bracketed comma-separated string.
+  const zeroVector = `[${new Array(1536).fill(0).join(",")}]`;
+  const rows = chunks.map((content) => ({
+    user_id: user.id,
+    source_name: file.name,
+    content,
+    embedding: zeroVector,
+  }));
+
+  const { error: insertError } = await supabase.from("chunks").insert(rows);
+  if (insertError) {
+    console.error("chunk insert error:", insertError);
+    return NextResponse.json(
+      { error: "Failed to save chunks. Please try again." },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ count: chunks.length });
 }
