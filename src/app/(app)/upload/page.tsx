@@ -203,7 +203,7 @@ export default function UploadPage() {
 
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
-            href="/dashboard"
+            href={`/lesson?source=${encodeURIComponent(successFileName ?? "")}`}
             className="inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-300 hover:bg-[#e2bb68] hover:scale-[1.03] active:scale-[0.98]"
           >
             Start learning
