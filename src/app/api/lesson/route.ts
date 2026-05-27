@@ -47,7 +47,8 @@ Structure your response as a proper lesson with:
 4. A summary of key takeaways
 
 Write in a warm, direct teaching voice. Use examples. Make it genuinely interesting.
-Format using markdown.`;
+Format using markdown.
+Do not use emojis anywhere in your response. Use clean typography and formatting only.`;
 
 // The model id. Pulled out as a constant so a model upgrade is a one-line edit
 // in one place rather than a string buried in the call below.
