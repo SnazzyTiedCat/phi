@@ -120,19 +120,47 @@ export default function LessonView({ chunks, source }: Props) {
   }
 
   // ── Loading ─────────────────────────────────────────────────────────────--
-  // A calm, centered holding screen. The φ pulses gently (the glow-breathe
-  // animation already defined in globals.css) so the wait feels alive rather
-  // than frozen. Muted text keeps it quiet.
+  // Skeleton that mirrors the lesson layout: wide title block, narrower subtitle,
+  // then a series of paragraph-width bars. `animate-pulse` fades them in and out
+  // so the screen feels alive. All blocks use bg-surface (the dark card color
+  // from globals.css) — slightly lighter than the page background, visible but
+  // not jarring against the dark theme.
   if (status === "loading") {
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-6 py-12 text-center">
-        <span
-          aria-hidden="true"
-          className="animate-glow-breathe text-5xl font-extralight leading-none text-accent"
-        >
-          φ
-        </span>
-        <p className="mt-6 text-sm text-muted">Phi is preparing your lesson…</p>
+      <div
+        aria-label="Loading lesson…"
+        aria-busy="true"
+        className="mx-auto max-w-3xl px-6 py-12 animate-pulse"
+      >
+        {/* Title */}
+        <div className="h-9 w-2/3 rounded-lg bg-surface" />
+        {/* Subtitle / intro line */}
+        <div className="mt-4 h-5 w-1/2 rounded bg-surface" />
+
+        {/* First section */}
+        <div className="mt-12 h-6 w-2/5 rounded-lg bg-surface" />
+        <div className="mt-4 space-y-2">
+          <div className="h-4 w-full rounded bg-surface" />
+          <div className="h-4 w-full rounded bg-surface" />
+          <div className="h-4 w-4/5 rounded bg-surface" />
+        </div>
+
+        {/* Second section */}
+        <div className="mt-10 h-6 w-1/3 rounded-lg bg-surface" />
+        <div className="mt-4 space-y-2">
+          <div className="h-4 w-full rounded bg-surface" />
+          <div className="h-4 w-11/12 rounded bg-surface" />
+          <div className="h-4 w-3/4 rounded bg-surface" />
+        </div>
+
+        {/* Third section */}
+        <div className="mt-10 h-6 w-2/5 rounded-lg bg-surface" />
+        <div className="mt-4 space-y-2">
+          <div className="h-4 w-full rounded bg-surface" />
+          <div className="h-4 w-5/6 rounded bg-surface" />
+          <div className="h-4 w-full rounded bg-surface" />
+          <div className="h-4 w-2/3 rounded bg-surface" />
+        </div>
       </div>
     );
   }
