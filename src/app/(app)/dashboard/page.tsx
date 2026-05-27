@@ -58,6 +58,19 @@ export default async function DashboardPage() {
 
   const hasSources = sources.length > 0;
 
+  // ── Fetch which sources already have a cached lesson ──────────────────────
+  // A lesson row exists once the API route generates and saves one. We use this
+  // to show "Continue learning" (gold, inviting) vs "Start learning" (muted,
+  // not-yet-done) on each card.
+  const { data: lessonRows } = await supabase
+    .from("lessons")
+    .select("source_name")
+    .eq("user_id", user?.id ?? "");
+
+  const cachedSources = new Set(
+    (lessonRows ?? []).map((row: { source_name: string }) => row.source_name),
+  );
+
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
       {/* ── Header row: greeting + persistent "Upload material" action ─────────
@@ -130,12 +143,15 @@ export default async function DashboardPage() {
                 {source}
               </h2>
 
-              {/* The call to action. It's text, not a nested button, because the
-                  parent <Link> is already the interactive element (a button
-                  inside a link is invalid HTML). The arrow nudges right on hover
-                  as a small reward-for-curiosity micro-interaction. */}
-              <span className="mt-6 inline-flex items-center text-sm font-medium text-accent">
-                Start learning
+              {/* The call to action. Gold = lesson already cached ("come back"),
+                  muted = not generated yet ("start here"). It's text, not a
+                  nested button — the parent <Link> is the interactive element. */}
+              <span
+                className={`mt-6 inline-flex items-center text-sm font-medium transition-colors ${
+                  cachedSources.has(source) ? "text-accent" : "text-muted"
+                }`}
+              >
+                {cachedSources.has(source) ? "Continue learning" : "Start learning"}
                 <span className="ml-1 transition-transform duration-300 group-hover:translate-x-1">
                   →
                 </span>
