@@ -45,6 +45,35 @@ export default function LessonView({ chunks, source }: Props) {
   const [lesson, setLesson] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
+  // ── Read-aloud (ElevenLabs TTS) state ──────────────────────────────────────
+  // The <audio> element we control imperatively (play/pause/stop). It's hidden;
+  // we don't show native controls — the bar below the title IS the controls.
+  const audioRef = useRef<HTMLAudioElement>(null);
+  // The object URL of the fetched MP3 blob. We keep it so we can revoke it (free
+  // the memory) when we fetch a new one or unmount.
+  const audioUrlRef = useRef<string | null>(null);
+  // Drives the play/pause icon. True only while audio is actively playing.
+  const [isPlaying, setIsPlaying] = useState(false);
+  // True while the MP3 is being fetched, so the play button can show a spinner.
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
+  // Whether the student has an ElevenLabs key saved. We can't read localStorage
+  // during the server render, so we start `false` and flip it in an effect.
+  // While it's false the entire audio bar is hidden (no key → no bar, per spec).
+  const [hasElevenLabsKey, setHasElevenLabsKey] = useState(false);
+
+  // Detect the ElevenLabs key once on mount. Browser-only (effects don't run on
+  // the server), so localStorage is safe to touch here.
+  useEffect(() => {
+    setHasElevenLabsKey(Boolean(localStorage.getItem("phi_elevenlabs_key")));
+  }, []);
+
+  // On unmount, revoke any outstanding blob URL so we don't leak it.
+  useEffect(() => {
+    return () => {
+      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     // We define the request as an inner async function because `useEffect`'s
     // callback itself cannot be `async` (it must return either nothing or a
@@ -231,6 +260,84 @@ export default function LessonView({ chunks, source }: Props) {
     }
   }
 
+  // ── Read-aloud handlers ─────────────────────────────────────────────────--
+  // Turn the lesson markdown into plain prose for the voice. ElevenLabs reads
+  // text literally, so leaving "##" or "**" in would make it speak the symbols.
+  // This is a light strip — enough to sound natural, not a full markdown parser.
+  function stripMarkdown(md: string): string {
+    return md
+      .replace(/```[\s\S]*?```/g, "") // fenced code blocks — don't read code aloud
+      .replace(/`([^`]+)`/g, "$1") // inline code → its contents
+      .replace(/^#{1,6}\s+/gm, "") // heading markers
+      .replace(/(\*\*|__)(.*?)\1/g, "$2") // bold
+      .replace(/(\*|_)(.*?)\1/g, "$2") // italic
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // images
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // links → link text
+      .replace(/^>\s?/gm, "") // blockquote markers
+      .replace(/^[-*+]\s+/gm, "") // bullet markers
+      .replace(/^\d+\.\s+/gm, "") // numbered-list markers
+      .replace(/^[-*_]{3,}\s*$/gm, "") // horizontal rules
+      .replace(/\n{3,}/g, "\n\n") // collapse big gaps
+      .trim();
+  }
+
+  // Play (or resume) the read-aloud. If we already fetched the audio, we just
+  // resume the existing element — no second API call. Otherwise we fetch it,
+  // wire up the blob, and start playback.
+  async function playAudio() {
+    const el = audioRef.current;
+    if (!el) return;
+
+    // Already have audio loaded → just resume. Cheap path, no network.
+    if (audioUrlRef.current) {
+      el.play();
+      return;
+    }
+
+    const apiKey = localStorage.getItem("phi_elevenlabs_key");
+    // Defensive: the bar is hidden without a key, but the key could be cleared
+    // between mount and click. Bail silently rather than fire a doomed request.
+    if (!apiKey) return;
+
+    setIsAudioLoading(true);
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: stripMarkdown(lesson), apiKey }),
+      });
+
+      // The route returns JSON { error } on failure and audio/mpeg on success.
+      // We don't surface errors in the UI (spec: no error UI for this feature),
+      // so on a bad response we just stop — the bar stays idle.
+      if (!res.ok) return;
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      audioUrlRef.current = url;
+      el.src = url;
+      el.play();
+    } catch {
+      // Network failure — stay idle, no error UI.
+    } finally {
+      setIsAudioLoading(false);
+    }
+  }
+
+  // Pause without losing position — the play button resumes from here.
+  function pauseAudio() {
+    audioRef.current?.pause();
+  }
+
+  // Stop: pause and rewind to the start so the next play restarts the lesson.
+  function stopAudio() {
+    const el = audioRef.current;
+    if (!el) return;
+    el.pause();
+    el.currentTime = 0;
+    setIsPlaying(false);
+  }
+
   // ── No API key ────────────────────────────────────────────────────────────
   // The student can't generate anything without a key. Send them to Settings
   // with a clear, gold-accented link (the accent is reserved for the primary
@@ -337,6 +444,18 @@ export default function LessonView({ chunks, source }: Props) {
   //   - On desktop the sidebar is `sticky top-0 h-screen` so it stays in view
   //     and scrolls its OWN message list while the lesson scrolls the page.
   //     On mobile it has natural height and just sits under the lesson.
+  //
+  // Split the lesson into its title and the rest. Claude opens every lesson with
+  // a single `# Heading` line; we pull that out so the read-aloud bar can sit
+  // directly BELOW the title (per spec) instead of above all the content. If the
+  // first line isn't a heading (defensive), title is empty and the whole string
+  // renders as body — the bar then just sits at the top.
+  const firstNewline = lesson.indexOf("\n");
+  const firstLine = firstNewline === -1 ? lesson : lesson.slice(0, firstNewline);
+  const isTitleLine = /^#\s+/.test(firstLine.trim());
+  const lessonTitle = isTitleLine ? firstLine.trim().replace(/^#\s+/, "") : "";
+  const lessonBody = isTitleLine ? lesson.slice(firstNewline + 1).trimStart() : lesson;
+
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
       {/* Left: the taught lesson. The article keeps all the markdown typography
@@ -363,7 +482,71 @@ export default function LessonView({ chunks, source }: Props) {
             [&_hr]:my-8 [&_hr]:border-white/10
           "
         >
-          <ReactMarkdown>{lesson}</ReactMarkdown>
+          {/* Title rendered manually (not by ReactMarkdown) so the read-aloud
+              bar can sit directly beneath it. Uses the same look the markdown h1
+              had. If there's no detected title, this collapses to nothing. */}
+          {lessonTitle && (
+            <h1 className="mb-4 mt-2 text-3xl font-semibold tracking-tight text-text">
+              {lessonTitle}
+            </h1>
+          )}
+
+          {/* Read-aloud bar — below the title, above the lesson body. Minimal:
+              play/pause (gold), a label, and stop. Hidden entirely when the
+              student has no ElevenLabs key saved. */}
+          {hasElevenLabsKey && (
+            <div className="mb-8 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={isPlaying ? pauseAudio : playAudio}
+                disabled={isAudioLoading}
+                aria-label={isPlaying ? "Pause read-aloud" : "Play read-aloud"}
+                className="
+                  flex h-8 w-8 cursor-pointer items-center justify-center rounded-full
+                  bg-accent text-background transition-colors hover:bg-[#e2bb68]
+                  disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent
+                "
+              >
+                {isAudioLoading ? (
+                  <span
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-background/40 border-t-background"
+                  />
+                ) : isPlaying ? (
+                  <span aria-hidden="true" className="text-xs leading-none">⏸</span>
+                ) : (
+                  <span aria-hidden="true" className="text-xs leading-none">▶</span>
+                )}
+              </button>
+
+              <span className="text-sm text-muted">Read aloud</span>
+
+              <button
+                type="button"
+                onClick={stopAudio}
+                aria-label="Stop read-aloud"
+                className="
+                  flex h-8 w-8 cursor-pointer items-center justify-center rounded-full
+                  text-muted transition-colors hover:bg-white/5 hover:text-text
+                "
+              >
+                <span aria-hidden="true" className="text-xs leading-none">■</span>
+              </button>
+
+              {/* The audio element itself — hidden; the bar above is its UI. The
+                  handlers keep `isPlaying` true to reality, including when the
+                  track finishes on its own (onEnded). */}
+              <audio
+                ref={audioRef}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onEnded={() => setIsPlaying(false)}
+                className="hidden"
+              />
+            </div>
+          )}
+
+          <ReactMarkdown>{lessonBody}</ReactMarkdown>
         </article>
       </main>
 
