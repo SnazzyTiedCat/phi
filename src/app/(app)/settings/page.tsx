@@ -154,6 +154,11 @@ export default function SettingsPage() {
             className="w-full rounded-lg border border-white/[0.08] bg-background px-4 py-3 text-sm text-text outline-none transition-colors placeholder:text-muted/60 focus:border-accent/60"
             placeholder="sk-ant-..."
           />
+          {/* Heads-up that an alternative provider is on the way — muted + xs so
+              it informs without competing with the field itself. */}
+          <p className="text-xs text-muted">
+            OpenAI API key support is coming soon.
+          </p>
         </div>
 
         <div className="flex items-center gap-4">
