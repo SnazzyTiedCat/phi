@@ -642,13 +642,11 @@ export default function LessonView({ chunks, source }: Props) {
                   disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent
                 "
               >
-                {isFlashcardsLoading && (
-                  <span
-                    aria-hidden="true"
-                    className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-background/40 border-t-background"
-                  />
+                {isFlashcardsLoading ? (
+                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  "Generate flashcards"
                 )}
-                {isFlashcardsLoading ? "Generating flashcards…" : "Generate flashcards"}
               </button>
               {flashcardsError && (
                 <p role="alert" className="text-xs text-red-400">
