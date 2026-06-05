@@ -44,14 +44,28 @@ export default async function AppLayout({
           the page without a heavy bar. */}
       <header className="sticky top-0 z-10 border-b border-white/[0.06] bg-background/80 backdrop-blur-sm">
         <nav className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-6">
-          {/* Left: the φ mark doubles as the "home" link back to the dashboard. */}
-          <Link
-            href="/dashboard"
-            className="select-none text-2xl font-extralight leading-none tracking-tighter text-accent transition-opacity hover:opacity-80"
-            aria-label="Phi — dashboard"
-          >
-            φ
-          </Link>
+          {/* Left: the φ mark. On hover it cross-fades into a back chevron — the
+              logo "melts" into a back button — while still linking to the
+              dashboard. The `group` on the wrapper drives both fades; the chevron
+              is layered on top of the φ with absolute positioning. Both are
+              pure-CSS (group-hover), so no client JS is needed here. */}
+          <div className="group relative">
+            <Link
+              href="/dashboard"
+              aria-label="Back to dashboard"
+              className="relative block leading-none"
+            >
+              <span className="select-none text-2xl font-extralight leading-none tracking-tighter text-accent transition-opacity duration-200 group-hover:opacity-0">
+                φ
+              </span>
+              <span
+                aria-hidden="true"
+                className="absolute inset-0 flex items-center justify-center text-2xl text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+              >
+                ‹
+              </span>
+            </Link>
+          </div>
 
           {/* Right: settings entry. The ⚙ is a Unicode glyph so we don't pull
               in an icon library for the MVP. aria-hidden on the glyph keeps it
