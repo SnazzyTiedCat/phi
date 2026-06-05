@@ -739,10 +739,13 @@ export default function LessonView({ chunks, source }: Props) {
       )}
 
       {/* ── Floating action bar ─────────────────────────────────────────────
-          A light capsule pinned to the bottom-centre of the viewport. Three
-          controls: toggle flashcards, play/pause read-aloud (gold), toggle chat.
-          `fixed` lifts it out of flow so it floats over both columns. */}
-      <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-6 rounded-full border border-white/10 bg-black/80 px-6 py-3 backdrop-blur-md">
+          An elevated rounded bubble pinned to the bottom-centre of the viewport.
+          Three controls: toggle flashcards, play/pause read-aloud, toggle chat.
+          `fixed` lifts it out of flow so it floats over both columns. The deep
+          `shadow-2xl shadow-black/50` plus a hairline `ring-white/5` lift it off
+          the page so it reads as floating ~6px above the content, not welded to
+          the bottom edge. */}
+      <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-8 rounded-2xl border border-white/8 bg-zinc-900/90 px-8 py-4 shadow-2xl shadow-black/50 ring-1 ring-white/5 backdrop-blur-xl">
         {/* Flashcards toggle — amber when the panel is open, otherwise a quiet
             white/60 that brightens on hover. */}
         <button
