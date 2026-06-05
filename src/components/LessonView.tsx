@@ -167,6 +167,15 @@ export default function LessonView({ chunks, source }: Props) {
   // A user-facing message for the flashcards bar (missing key, network, etc).
   const [flashcardsError, setFlashcardsError] = useState("");
 
+  // ── Floating action bar toggles ────────────────────────────────────────--
+  // Whether the flashcards panel is shown. Toggled by the floating bar's grid
+  // button. Starts closed — the lesson is the focus; cards are opt-in.
+  const [flashcardsOpen, setFlashcardsOpen] = useState(false);
+  // Whether the chat sidebar is expanded. Toggled by the floating bar's chat
+  // button. Starts open so "Ask" is there by default. When closed we unmount the
+  // aside, and the lesson <main> (flex-1) grows to fill the freed width.
+  const [chatOpen, setChatOpen] = useState(true);
+
   // On mount, ask the cache (GET — no key, no Claude call) whether cards already
   // exist for this source. If they do, show them instantly so a returning
   // student doesn't regenerate. A miss leaves `flashcards` null → Generate bar.
@@ -403,13 +412,6 @@ export default function LessonView({ chunks, source }: Props) {
     setIsPlaying(false);
   }
 
-  // Stop: cancel() discards the utterance entirely, so the next Play starts the
-  // lesson over from the beginning.
-  function stopAudio() {
-    window.speechSynthesis.cancel();
-    setIsPlaying(false);
-  }
-
   // ── No API key ────────────────────────────────────────────────────────────
   // The student can't generate anything without a key. Send them to Settings
   // with a clear, gold-accented link (the accent is reserved for the primary
@@ -563,98 +565,54 @@ export default function LessonView({ chunks, source }: Props) {
             </h1>
           )}
 
-          {/* Read-aloud bar — below the title, above the lesson body. Minimal:
-              play/pause (gold), a label, and stop. Shown whenever the browser
-              supports speech synthesis — no API key required. */}
-          {supportsSpeech && (
-            <div className="mb-8">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={isPlaying ? pauseAudio : playAudio}
-                  aria-label={isPlaying ? "Pause read-aloud" : "Play read-aloud"}
-                  className="
-                    flex h-8 w-8 cursor-pointer items-center justify-center rounded-full
-                    bg-accent text-background transition-colors hover:bg-[#e2bb68]
-                  "
-                >
-                  {isPlaying ? (
-                    <span aria-hidden="true" className="text-xs leading-none">⏸</span>
-                  ) : (
-                    <span aria-hidden="true" className="text-xs leading-none">▶</span>
-                  )}
-                </button>
-
-                <span className="text-sm text-muted">Read aloud</span>
-
-                <button
-                  type="button"
-                  onClick={stopAudio}
-                  aria-label="Stop read-aloud"
-                  className="
-                    flex h-8 w-8 cursor-pointer items-center justify-center rounded-full
-                    text-muted transition-colors hover:bg-white/5 hover:text-text
-                  "
-                >
-                  <span aria-hidden="true" className="text-xs leading-none">■</span>
-                </button>
-              </div>
-
-              {/* Sets expectations — it's the OS/browser voice, not a premium
-                  one — and quietly explains why no key is needed. */}
-              <p className="mt-2 text-xs text-muted">Voice powered by your browser</p>
-            </div>
-          )}
-
           <ReactMarkdown>{lessonBody}</ReactMarkdown>
         </article>
 
-        {/* ── Flashcards ─────────────────────────────────────────────────────
-            Lives at the bottom of the LESSON column (not the chat). Two states:
-              - cards present → a grid of flip cards below the lesson.
-              - none yet      → a sticky "Generate flashcards" bar pinned to the
-                                bottom of the viewport while the lesson scrolls. */}
-        {flashcards && flashcards.length > 0 ? (
-          <section className="mx-auto max-w-3xl px-6 pb-16">
-            <h2 className="mb-1 text-2xl font-semibold tracking-tight text-text">
-              Flashcards
-            </h2>
-            <p className="mb-6 text-sm text-muted">Click a card to flip it.</p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {flashcards.map((card, i) => (
-                <FlipCard key={i} front={card.front} back={card.back} />
-              ))}
-            </div>
-          </section>
-        ) : (
-          // `sticky bottom-0` keeps this CTA pinned to the bottom of the viewport
-          // while the long lesson scrolls. The translucent, blurred background
-          // keeps lesson text legible behind it.
-          <div className="sticky bottom-0 border-t border-white/10 bg-background/85 px-6 py-4 backdrop-blur">
-            <div className="mx-auto flex max-w-3xl flex-col items-center gap-2">
-              <button
-                type="button"
-                onClick={generateFlashcards}
-                disabled={isFlashcardsLoading}
-                className="
-                  flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-5 py-2.5
-                  text-sm font-medium text-background transition-colors hover:bg-[#e2bb68]
-                  disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent
-                "
-              >
-                {isFlashcardsLoading ? (
-                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  "Generate flashcards"
+        {/* ── Flashcards panel ───────────────────────────────────────────────
+            Toggled open/closed by the floating action bar's grid button. When
+            open it shows the generated cards, or a Generate button if there are
+            none yet. `pb-28` clears the floating bar so the last card isn't
+            hidden behind it. */}
+        {flashcardsOpen && (
+          <section className="mx-auto max-w-3xl px-6 pb-28">
+            {flashcards && flashcards.length > 0 ? (
+              <>
+                <h2 className="mb-1 text-2xl font-semibold tracking-tight text-text">
+                  Flashcards
+                </h2>
+                <p className="mb-6 text-sm text-muted">Click a card to flip it.</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {flashcards.map((card, i) => (
+                    <FlipCard key={i} front={card.front} back={card.back} />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-2 py-8">
+                <button
+                  type="button"
+                  onClick={generateFlashcards}
+                  disabled={isFlashcardsLoading}
+                  className="
+                    flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-5 py-2.5
+                    text-sm font-medium text-background transition-colors hover:bg-[#e2bb68]
+                    disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent
+                  "
+                >
+                  {isFlashcardsLoading ? (
+                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    "Generate flashcards"
+                  )}
+                </button>
+                {flashcardsError && (
+                  <p role="alert" className="text-xs text-red-400">
+                    {flashcardsError}
+                  </p>
                 )}
-              </button>
-              {flashcardsError && (
-                <p role="alert" className="text-xs text-red-400">
-                  {flashcardsError}
-                </p>
-              )}
-            </div>
-          </div>
+              </div>
+            )}
+          </section>
         )}
       </main>
 
@@ -664,6 +622,7 @@ export default function LessonView({ chunks, source }: Props) {
           header, scrollable message list, and the input. `flex flex-col`
           makes the middle row (`flex-1 overflow-y-auto`) absorb the leftover
           height so the header and input stay pinned. */}
+      {chatOpen && (
       <aside
         className="
           flex flex-col border-t border-white/10 bg-surface
@@ -771,6 +730,51 @@ export default function LessonView({ chunks, source }: Props) {
           </div>
         </div>
       </aside>
+      )}
+
+      {/* ── Floating action bar ─────────────────────────────────────────────
+          A light capsule pinned to the bottom-centre of the viewport. Three
+          controls: toggle flashcards, play/pause read-aloud (gold), toggle chat.
+          `fixed` lifts it out of flow so it floats over both columns. */}
+      <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-6 rounded-full border border-white/10 bg-black/80 px-6 py-3 backdrop-blur-md">
+        {/* Flashcards toggle — gold when the panel is open. */}
+        <button
+          type="button"
+          onClick={() => setFlashcardsOpen((open) => !open)}
+          aria-label="Toggle flashcards"
+          aria-pressed={flashcardsOpen}
+          className={`cursor-pointer text-lg leading-none transition-colors ${
+            flashcardsOpen ? "text-accent" : "text-muted hover:text-text"
+          }`}
+        >
+          <span aria-hidden="true">▦</span>
+        </button>
+
+        {/* Play/Pause read-aloud (gold) — the existing Web Speech logic.
+            Disabled (dimmed) if the browser can't speak. */}
+        <button
+          type="button"
+          onClick={isPlaying ? pauseAudio : playAudio}
+          disabled={!supportsSpeech}
+          aria-label={isPlaying ? "Pause read-aloud" : "Play read-aloud"}
+          className="cursor-pointer text-lg leading-none text-accent transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <span aria-hidden="true">{isPlaying ? "⏸" : "▶"}</span>
+        </button>
+
+        {/* Chat toggle — gold when the sidebar is expanded. */}
+        <button
+          type="button"
+          onClick={() => setChatOpen((open) => !open)}
+          aria-label="Toggle chat"
+          aria-pressed={chatOpen}
+          className={`cursor-pointer text-lg leading-none transition-colors ${
+            chatOpen ? "text-accent" : "text-muted hover:text-text"
+          }`}
+        >
+          <span aria-hidden="true">💬</span>
+        </button>
+      </div>
     </div>
   );
 }
