@@ -45,32 +45,36 @@ export default function LessonView({ chunks, source }: Props) {
   const [lesson, setLesson] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
-  // ── Read-aloud (ElevenLabs TTS) state ──────────────────────────────────────
-  // The <audio> element we control imperatively (play/pause/stop). It's hidden;
-  // we don't show native controls — the bar below the title IS the controls.
-  const audioRef = useRef<HTMLAudioElement>(null);
-  // The object URL of the fetched MP3 blob. We keep it so we can revoke it (free
-  // the memory) when we fetch a new one or unmount.
-  const audioUrlRef = useRef<string | null>(null);
-  // Drives the play/pause icon. True only while audio is actively playing.
+  // ── Read-aloud (browser Web Speech API) state ──────────────────────────────
+  // No <audio> element and no network: we hand the lesson text straight to the
+  // browser's built-in speech synthesizer (window.speechSynthesis). We keep a
+  // ref to the current utterance because some browsers garbage-collect an
+  // utterance that nothing references, which silently kills its events — holding
+  // it here keeps it (and its onend handler) alive while it's speaking.
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  // Drives the play/pause icon. True only while speech is actively playing.
   const [isPlaying, setIsPlaying] = useState(false);
-  // True while the MP3 is being fetched, so the play button can show a spinner.
-  const [isAudioLoading, setIsAudioLoading] = useState(false);
-  // Whether the student has an ElevenLabs key saved. We can't read localStorage
-  // during the server render, so we start `false` and flip it in an effect.
-  // While it's false the entire audio bar is hidden (no key → no bar, per spec).
-  const [hasElevenLabsKey, setHasElevenLabsKey] = useState(false);
+  // Whether this browser can speak. Web Speech is widely supported but not
+  // universal, and `window` doesn't exist during the server render. This reuses
+  // the exact hydration-safe pattern the old ElevenLabs-key check used: the
+  // server pass reads `false` (bar hidden in the initial HTML), then client
+  // hydration picks up the real value. Reading in the initializer (not an
+  // effect) avoids the cascading re-render React warns about. It REPLACES the
+  // old "does the student have an ElevenLabs key?" gate — read-aloud now needs
+  // no key at all, just a capable browser.
+  const [supportsSpeech] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return "speechSynthesis" in window;
+  });
 
-  // Detect the ElevenLabs key once on mount. Browser-only (effects don't run on
-  // the server), so localStorage is safe to touch here.
-  useEffect(() => {
-    setHasElevenLabsKey(Boolean(localStorage.getItem("phi_elevenlabs_key")));
-  }, []);
-
-  // On unmount, revoke any outstanding blob URL so we don't leak it.
+  // If the student navigates away mid-read, stop the voice — otherwise the
+  // browser keeps speaking after this view is gone (speechSynthesis is global,
+  // not tied to the component).
   useEffect(() => {
     return () => {
-      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, []);
 
@@ -261,9 +265,9 @@ export default function LessonView({ chunks, source }: Props) {
   }
 
   // ── Read-aloud handlers ─────────────────────────────────────────────────--
-  // Turn the lesson markdown into plain prose for the voice. ElevenLabs reads
-  // text literally, so leaving "##" or "**" in would make it speak the symbols.
-  // This is a light strip — enough to sound natural, not a full markdown parser.
+  // Turn the lesson markdown into plain prose for the voice. A speech synthesizer
+  // reads text literally, so leaving "##" or "**" in would make it speak the
+  // symbols. A light strip — enough to sound natural, not a full markdown parser.
   function stripMarkdown(md: string): string {
     return md
       .replace(/```[\s\S]*?```/g, "") // fenced code blocks — don't read code aloud
@@ -281,60 +285,52 @@ export default function LessonView({ chunks, source }: Props) {
       .trim();
   }
 
-  // Play (or resume) the read-aloud. If we already fetched the audio, we just
-  // resume the existing element — no second API call. Otherwise we fetch it,
-  // wire up the blob, and start playback.
-  async function playAudio() {
-    const el = audioRef.current;
-    if (!el) return;
+  // Play (or resume) the read-aloud.
+  //   - If speech is currently PAUSED, resume from where it left off.
+  //   - If it's already speaking, do nothing.
+  //   - Otherwise build a fresh utterance and start from the top.
+  // The spec said "create an utterance and speak()", but doing that blindly on
+  // every Play press would restart (or stack a second reading) after a pause.
+  // Resuming when paused is what makes the play/pause button behave like a real
+  // player.
+  function playAudio() {
+    const synth = window.speechSynthesis;
 
-    // Already have audio loaded → just resume. Cheap path, no network.
-    if (audioUrlRef.current) {
-      el.play();
+    // Mid-read and paused → resume. No new utterance.
+    if (synth.paused && synth.speaking) {
+      synth.resume();
+      setIsPlaying(true);
       return;
     }
+    // Already speaking (and not paused) → nothing to do.
+    if (synth.speaking) return;
 
-    const apiKey = localStorage.getItem("phi_elevenlabs_key");
-    // Defensive: the bar is hidden without a key, but the key could be cleared
-    // between mount and click. Bail silently rather than fire a doomed request.
-    if (!apiKey) return;
+    // Fresh start. Cancel anything stale first so we never queue two readings.
+    synth.cancel();
 
-    setIsAudioLoading(true);
-    try {
-      const res = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: stripMarkdown(lesson), apiKey }),
-      });
+    const utterance = new SpeechSynthesisUtterance(stripMarkdown(lesson));
+    utterance.rate = 0.95; // a touch slower than default — easier to follow
+    utterance.pitch = 1.0; // natural pitch
+    // onend is the one transition the user doesn't trigger by hand: it fires
+    // both when the lesson finishes on its own AND when Stop cancels it, so it's
+    // where we flip the icon back to ▶.
+    utterance.onend = () => setIsPlaying(false);
 
-      // The route returns JSON { error } on failure and audio/mpeg on success.
-      // We don't surface errors in the UI (spec: no error UI for this feature),
-      // so on a bad response we just stop — the bar stays idle.
-      if (!res.ok) return;
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      audioUrlRef.current = url;
-      el.src = url;
-      el.play();
-    } catch {
-      // Network failure — stay idle, no error UI.
-    } finally {
-      setIsAudioLoading(false);
-    }
+    utteranceRef.current = utterance;
+    synth.speak(utterance);
+    setIsPlaying(true);
   }
 
-  // Pause without losing position — the play button resumes from here.
+  // Pause without losing position — Play resumes from here.
   function pauseAudio() {
-    audioRef.current?.pause();
+    window.speechSynthesis.pause();
+    setIsPlaying(false);
   }
 
-  // Stop: pause and rewind to the start so the next play restarts the lesson.
+  // Stop: cancel() discards the utterance entirely, so the next Play starts the
+  // lesson over from the beginning.
   function stopAudio() {
-    const el = audioRef.current;
-    if (!el) return;
-    el.pause();
-    el.currentTime = 0;
+    window.speechSynthesis.cancel();
     setIsPlaying(false);
   }
 
@@ -492,57 +488,45 @@ export default function LessonView({ chunks, source }: Props) {
           )}
 
           {/* Read-aloud bar — below the title, above the lesson body. Minimal:
-              play/pause (gold), a label, and stop. Hidden entirely when the
-              student has no ElevenLabs key saved. */}
-          {hasElevenLabsKey && (
-            <div className="mb-8 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={isPlaying ? pauseAudio : playAudio}
-                disabled={isAudioLoading}
-                aria-label={isPlaying ? "Pause read-aloud" : "Play read-aloud"}
-                className="
-                  flex h-8 w-8 cursor-pointer items-center justify-center rounded-full
-                  bg-accent text-background transition-colors hover:bg-[#e2bb68]
-                  disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent
-                "
-              >
-                {isAudioLoading ? (
-                  <span
-                    aria-hidden="true"
-                    className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-background/40 border-t-background"
-                  />
-                ) : isPlaying ? (
-                  <span aria-hidden="true" className="text-xs leading-none">⏸</span>
-                ) : (
-                  <span aria-hidden="true" className="text-xs leading-none">▶</span>
-                )}
-              </button>
+              play/pause (gold), a label, and stop. Shown whenever the browser
+              supports speech synthesis — no API key required. */}
+          {supportsSpeech && (
+            <div className="mb-8">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={isPlaying ? pauseAudio : playAudio}
+                  aria-label={isPlaying ? "Pause read-aloud" : "Play read-aloud"}
+                  className="
+                    flex h-8 w-8 cursor-pointer items-center justify-center rounded-full
+                    bg-accent text-background transition-colors hover:bg-[#e2bb68]
+                  "
+                >
+                  {isPlaying ? (
+                    <span aria-hidden="true" className="text-xs leading-none">⏸</span>
+                  ) : (
+                    <span aria-hidden="true" className="text-xs leading-none">▶</span>
+                  )}
+                </button>
 
-              <span className="text-sm text-muted">Read aloud</span>
+                <span className="text-sm text-muted">Read aloud</span>
 
-              <button
-                type="button"
-                onClick={stopAudio}
-                aria-label="Stop read-aloud"
-                className="
-                  flex h-8 w-8 cursor-pointer items-center justify-center rounded-full
-                  text-muted transition-colors hover:bg-white/5 hover:text-text
-                "
-              >
-                <span aria-hidden="true" className="text-xs leading-none">■</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={stopAudio}
+                  aria-label="Stop read-aloud"
+                  className="
+                    flex h-8 w-8 cursor-pointer items-center justify-center rounded-full
+                    text-muted transition-colors hover:bg-white/5 hover:text-text
+                  "
+                >
+                  <span aria-hidden="true" className="text-xs leading-none">■</span>
+                </button>
+              </div>
 
-              {/* The audio element itself — hidden; the bar above is its UI. The
-                  handlers keep `isPlaying` true to reality, including when the
-                  track finishes on its own (onEnded). */}
-              <audio
-                ref={audioRef}
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                onEnded={() => setIsPlaying(false)}
-                className="hidden"
-              />
+              {/* Sets expectations — it's the OS/browser voice, not a premium
+                  one — and quietly explains why no key is needed. */}
+              <p className="mt-2 text-xs text-muted">Voice powered by your browser</p>
             </div>
           )}
 
