@@ -5,6 +5,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import {
   Squares2X2Icon,
+  AcademicCapIcon,
   PlayIcon,
   PauseIcon,
   ChatBubbleLeftIcon,
@@ -46,6 +47,11 @@ type Message = { role: "user" | "assistant"; content: string };
 // One flashcard — the exact shape /api/flashcards returns and the FlipCard
 // component (bottom of this file) renders.
 type Flashcard = { front: string; back: string };
+
+// One quiz question — the exact shape /api/quiz returns and the QuizRunner
+// component (bottom of this file) renders. `correct` is the 0-based index into
+// `options` of the right answer.
+type QuizQuestion = { question: string; options: string[]; correct: number };
 
 export default function LessonView({ chunks, source }: Props) {
   // Start in "loading": the moment the component mounts we'll either kick off
@@ -173,14 +179,35 @@ export default function LessonView({ chunks, source }: Props) {
   // A user-facing message for the flashcards bar (missing key, network, etc).
   const [flashcardsError, setFlashcardsError] = useState("");
 
+  // ── Quiz state ──────────────────────────────────────────────────────────--
+  // Same shape as flashcards: the generated questions (null until loaded), an
+  // in-flight flag, and an error message.
+  const [quiz, setQuiz] = useState<QuizQuestion[] | null>(null);
+  const [isQuizLoading, setIsQuizLoading] = useState(false);
+  const [quizError, setQuizError] = useState("");
+
   // ── Floating action bar toggles ────────────────────────────────────────--
   // Whether the flashcards panel is shown. Toggled by the floating bar's grid
   // button. Starts closed — the lesson is the focus; cards are opt-in.
   const [flashcardsOpen, setFlashcardsOpen] = useState(false);
+  // Whether the quiz panel is shown. Mutually exclusive with flashcards (both
+  // render in the same spot below the lesson), so opening one closes the other.
+  const [quizOpen, setQuizOpen] = useState(false);
   // Whether the chat sidebar is expanded. Toggled by the floating bar's chat
   // button. Starts open so "Ask" is there by default. When closed we unmount the
   // aside, and the lesson <main> (flex-1) grows to fill the freed width.
   const [chatOpen, setChatOpen] = useState(true);
+
+  // Flashcards and quiz share the area below the lesson, so only one can be open
+  // at a time — opening either closes the other.
+  function toggleFlashcards() {
+    setFlashcardsOpen((open) => !open);
+    setQuizOpen(false);
+  }
+  function toggleQuiz() {
+    setQuizOpen((open) => !open);
+    setFlashcardsOpen(false);
+  }
 
   // On mount, ask the cache (GET — no key, no Claude call) whether cards already
   // exist for this source. If they do, show them instantly so a returning
@@ -240,6 +267,62 @@ export default function LessonView({ chunks, source }: Props) {
       setFlashcardsError("Network error. Check your connection and try again.");
     } finally {
       setIsFlashcardsLoading(false);
+    }
+  }
+
+  // ── Load cached quiz on mount ───────────────────────────────────────────--
+  // Same as the flashcards cache load: a keyless GET so a returning student sees
+  // their quiz instantly without regenerating (or spending tokens) on a miss.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCachedQuiz() {
+      try {
+        const res = await fetch(`/api/quiz?source=${encodeURIComponent(source)}`);
+        if (!res.ok) return;
+        const data: { questions?: QuizQuestion[] | null } = await res.json();
+        if (!cancelled && Array.isArray(data.questions) && data.questions.length > 0) {
+          setQuiz(data.questions);
+        }
+      } catch {
+        // Cache read failed — not fatal; the student can still generate.
+      }
+    }
+    loadCachedQuiz();
+    return () => {
+      cancelled = true;
+    };
+  }, [source]);
+
+  // ── Generate quiz ───────────────────────────────────────────────────────--
+  // POST the source (+ the Anthropic key from localStorage) to /api/quiz. On
+  // success the Generate button is replaced by the runnable quiz.
+  async function generateQuiz() {
+    if (isQuizLoading) return;
+
+    const apiKey = localStorage.getItem("phi_anthropic_key");
+    if (!apiKey) {
+      setQuizError("Add your Anthropic API key in Settings to generate a quiz.");
+      return;
+    }
+
+    setQuizError("");
+    setIsQuizLoading(true);
+    try {
+      const res = await fetch("/api/quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source, apiKey }),
+      });
+      const data: { questions?: QuizQuestion[]; error?: string } = await res.json();
+      if (!res.ok) {
+        setQuizError(data.error || "Could not generate a quiz. Please try again.");
+        return;
+      }
+      setQuiz(data.questions ?? []);
+    } catch {
+      setQuizError("Network error. Check your connection and try again.");
+    } finally {
+      setIsQuizLoading(false);
     }
   }
 
@@ -622,6 +705,52 @@ export default function LessonView({ chunks, source }: Props) {
           </section>
           </SpringIn>
         )}
+
+        {/* ── Quiz panel ─────────────────────────────────────────────────────
+            Toggled by the floating bar's cap button, mutually exclusive with the
+            flashcards panel. Shows the runnable quiz, or a Generate button if
+            none exists yet. `pb-28` clears the floating bar. */}
+        {quizOpen && (
+          <SpringIn>
+          <section className="mx-auto max-w-3xl px-6 pb-28">
+            {quiz && quiz.length > 0 ? (
+              <>
+                <h2 className="mb-1 text-2xl font-semibold tracking-tight text-text">
+                  Quiz
+                </h2>
+                <p className="mb-6 text-sm text-muted">
+                  Test what you&apos;ve learned.
+                </p>
+                <QuizRunner questions={quiz} />
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-2 py-8">
+                <button
+                  type="button"
+                  onClick={generateQuiz}
+                  disabled={isQuizLoading}
+                  className="
+                    flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-5 py-2.5
+                    text-sm font-medium text-background transition-colors hover:bg-[#e2bb68]
+                    disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent
+                  "
+                >
+                  {isQuizLoading ? (
+                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    "Generate quiz"
+                  )}
+                </button>
+                {quizError && (
+                  <p role="alert" className="text-xs text-red-400">
+                    {quizError}
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
+          </SpringIn>
+        )}
       </main>
 
       {/* Right: the chat sidebar. `bg-surface` lifts it off the page bg; the
@@ -742,11 +871,12 @@ export default function LessonView({ chunks, source }: Props) {
 
       {/* ── Floating action bar ─────────────────────────────────────────────
           An elevated rounded bubble pinned to the bottom-centre of the viewport.
-          Three controls: toggle flashcards, play/pause read-aloud, toggle chat.
-          `fixed` lifts it out of flow so it floats over both columns. The deep
-          `shadow-2xl shadow-black/50` plus a hairline `ring-white/5` lift it off
-          the page so it reads as floating ~6px above the content, not welded to
-          the bottom edge. While flashcards are generating, the quiet white ring
+          Four controls: toggle flashcards, toggle quiz, play/pause read-aloud,
+          toggle chat. `fixed` lifts it out of flow so it floats over both
+          columns. The deep `shadow-2xl shadow-black/50` plus a hairline
+          `ring-white/5` lift it off the page so it reads as floating ~6px above
+          the content, not welded to the bottom edge. While flashcards or the
+          quiz are generating, the quiet white ring
           swaps for a pulsing amber one (ring-2 ring-amber-400/60 animate-pulse)
           so the whole bubble glows as a "working" cue; `transition-all` smooths
           the swap back to rest. (I intentionally did NOT add `relative` here:
@@ -755,16 +885,16 @@ export default function LessonView({ chunks, source }: Props) {
           and the bar would scroll away.) */}
       <div
         className={`fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-8 rounded-2xl border border-white/8 bg-zinc-900/90 px-8 py-4 shadow-2xl shadow-black/50 backdrop-blur-xl transition-all ${
-          isFlashcardsLoading
+          isFlashcardsLoading || isQuizLoading
             ? "animate-pulse ring-2 ring-amber-400/60"
             : "ring-1 ring-white/5"
         }`}
       >
         {/* Flashcards toggle — amber when the panel is open, otherwise a quiet
-            white/60 that brightens on hover. */}
+            white/60 that brightens on hover. Opening it closes the quiz. */}
         <button
           type="button"
-          onClick={() => setFlashcardsOpen((open) => !open)}
+          onClick={toggleFlashcards}
           aria-label="Toggle flashcards"
           aria-pressed={flashcardsOpen}
           className="cursor-pointer"
@@ -772,6 +902,22 @@ export default function LessonView({ chunks, source }: Props) {
           <Squares2X2Icon
             className={`h-5 w-5 transition-colors ${
               flashcardsOpen ? "text-amber-400" : "text-white/60 hover:text-white"
+            }`}
+          />
+        </button>
+
+        {/* Quiz toggle — same amber/white treatment. Opening it closes the
+            flashcards panel (they share the space below the lesson). */}
+        <button
+          type="button"
+          onClick={toggleQuiz}
+          aria-label="Toggle quiz"
+          aria-pressed={quizOpen}
+          className="cursor-pointer"
+        >
+          <AcademicCapIcon
+            className={`h-5 w-5 transition-colors ${
+              quizOpen ? "text-amber-400" : "text-white/60 hover:text-white"
             }`}
           />
         </button>
@@ -886,4 +1032,140 @@ function FlipCard({ front, back }: Flashcard) {
       </div>
     </button>
   );
+}
+
+// ── QuizRunner ────────────────────────────────────────────────────────────────
+// Runs one quiz: shows a single question at a time, locks the options once the
+// student answers (revealing the correct one in green and a wrong pick in red),
+// tallies a score, and shows a results screen at the end with a retry. All quiz
+// progress lives in this component's own state, so it resets cleanly whenever the
+// panel remounts.
+function QuizRunner({ questions }: { questions: QuizQuestion[] }) {
+  const [current, setCurrent] = useState(0); // index of the question on screen
+  const [selected, setSelected] = useState<number | null>(null); // this Q's pick
+  const [score, setScore] = useState(0);
+  const [finished, setFinished] = useState(false);
+
+  const question = questions[current];
+  const answered = selected !== null;
+  const isLast = current === questions.length - 1;
+
+  // First click answers the question and locks it. We score on selection (not at
+  // the end) so we don't have to keep every answer around.
+  function choose(i: number) {
+    if (answered) return;
+    setSelected(i);
+    if (i === question.correct) setScore((s) => s + 1);
+  }
+
+  // Advance to the next question, or finish on the last one.
+  function next() {
+    if (isLast) {
+      setFinished(true);
+      return;
+    }
+    setCurrent((c) => c + 1);
+    setSelected(null);
+  }
+
+  function restart() {
+    setCurrent(0);
+    setSelected(null);
+    setScore(0);
+    setFinished(false);
+  }
+
+  // ── Results screen ──
+  if (finished) {
+    return (
+      <div className="flex flex-col items-center gap-4 rounded-2xl border border-white/10 bg-surface p-8 text-center">
+        <p className="text-xs uppercase tracking-wide text-muted">Quiz complete</p>
+        <p className="text-4xl font-semibold text-accent">
+          {score} <span className="text-muted">/ {questions.length}</span>
+        </p>
+        <p className="text-sm text-muted">{quizResultMessage(score, questions.length)}</p>
+        <button
+          type="button"
+          onClick={restart}
+          className="mt-2 cursor-pointer rounded-xl border border-white/10 bg-surface px-5 py-2.5 text-sm font-medium text-text transition-colors hover:border-white/25"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  // ── Question screen ──
+  return (
+    <div className="rounded-2xl border border-white/10 bg-surface p-6">
+      <p className="text-xs uppercase tracking-wide text-muted">
+        Question {current + 1} of {questions.length}
+      </p>
+      <h3 className="mt-2 text-lg font-medium text-text">{question.question}</h3>
+
+      <div className="mt-5 space-y-3">
+        {question.options.map((option, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => choose(i)}
+            disabled={answered}
+            className={quizOptionClass(i, question.correct, selected, answered)}
+          >
+            {/* A/B/C/D badge. `border-current` makes it inherit the option's
+                state colour (green/red/muted) once answered. */}
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current text-xs">
+              {String.fromCharCode(65 + i)}
+            </span>
+            <span>{option}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* The Next/Results button only appears once they've answered. */}
+      {answered && (
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={next}
+            className="cursor-pointer rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#e2bb68]"
+          >
+            {isLast ? "See results" : "Next question"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Per-option styling. Before answering: neutral with a hover. After: the correct
+// option is always green, the student's wrong pick is red, and the rest dim out.
+// Green/red are a deliberate exception to the 3-colour palette — right/wrong is
+// universally colour-coded and the meaning would be lost in monochrome.
+function quizOptionClass(
+  i: number,
+  correct: number,
+  selected: number | null,
+  answered: boolean,
+): string {
+  const base =
+    "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors";
+  if (!answered) {
+    return `${base} cursor-pointer border-white/10 text-text hover:border-white/25`;
+  }
+  if (i === correct) {
+    return `${base} border-green-500/60 bg-green-500/10 text-green-300`;
+  }
+  if (i === selected) {
+    return `${base} border-red-500/60 bg-red-500/10 text-red-300`;
+  }
+  return `${base} border-white/5 text-muted`;
+}
+
+// A short line of feedback keyed to the score ratio.
+function quizResultMessage(score: number, total: number): string {
+  const ratio = total === 0 ? 0 : score / total;
+  if (ratio === 1) return "Perfect — you've got this down.";
+  if (ratio >= 0.6) return "Solid. A quick review and you're there.";
+  return "Worth another pass through the lesson.";
 }
