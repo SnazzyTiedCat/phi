@@ -798,7 +798,7 @@ function FlipCard({ front, back }: Flashcard) {
     >
       <div
         className={`
-          relative h-full w-full rounded-2xl transition-transform duration-500
+          relative h-full w-full rounded-2xl transition-transform duration-300
           [transform-style:preserve-3d]
           ${flipped ? "[transform:rotateY(180deg)]" : ""}
         `}
