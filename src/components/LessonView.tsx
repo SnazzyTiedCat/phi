@@ -37,6 +37,10 @@ type Status = "loading" | "no-key" | "error" | "done";
 // state maps 1:1 onto what we send, no translation needed.
 type Message = { role: "user" | "assistant"; content: string };
 
+// One flashcard — the exact shape /api/flashcards returns and the FlipCard
+// component (bottom of this file) renders.
+type Flashcard = { front: string; back: string };
+
 export default function LessonView({ chunks, source }: Props) {
   // Start in "loading": the moment the component mounts we'll either kick off
   // the request or immediately flip to "no-key". Starting here avoids a flash
@@ -151,6 +155,78 @@ export default function LessonView({ chunks, source }: Props) {
     // view tracks the growing assistant reply in real time.
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
+
+  // ── Flashcards state ────────────────────────────────────────────────────--
+  // The generated cards, or null until we've loaded/generated them. null vs an
+  // empty array matters: null = "none yet" (show the Generate bar); a populated
+  // array = "show the cards".
+  const [flashcards, setFlashcards] = useState<Flashcard[] | null>(null);
+  // True while a generation request (POST) is in flight — drives the button's
+  // "Generating…" state and blocks double-clicks.
+  const [isFlashcardsLoading, setIsFlashcardsLoading] = useState(false);
+  // A user-facing message for the flashcards bar (missing key, network, etc).
+  const [flashcardsError, setFlashcardsError] = useState("");
+
+  // On mount, ask the cache (GET — no key, no Claude call) whether cards already
+  // exist for this source. If they do, show them instantly so a returning
+  // student doesn't regenerate. A miss leaves `flashcards` null → Generate bar.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCachedFlashcards() {
+      try {
+        const res = await fetch(
+          `/api/flashcards?source=${encodeURIComponent(source)}`,
+        );
+        if (!res.ok) return;
+        const data: { cards?: Flashcard[] | null } = await res.json();
+        if (!cancelled && Array.isArray(data.cards) && data.cards.length > 0) {
+          setFlashcards(data.cards);
+        }
+      } catch {
+        // Cache read failed — not fatal; the student can still generate.
+      }
+    }
+    loadCachedFlashcards();
+    // Guard against a late response resolving after the view unmounts.
+    return () => {
+      cancelled = true;
+    };
+  }, [source]);
+
+  // ── Generate flashcards ─────────────────────────────────────────────────--
+  // POST the source (+ the Anthropic key from localStorage) to /api/flashcards.
+  // On success the Generate bar is replaced by the rendered cards.
+  async function generateFlashcards() {
+    if (isFlashcardsLoading) return;
+
+    const apiKey = localStorage.getItem("phi_anthropic_key");
+    if (!apiKey) {
+      setFlashcardsError("Add your Anthropic API key in Settings to generate flashcards.");
+      return;
+    }
+
+    setFlashcardsError("");
+    setIsFlashcardsLoading(true);
+    try {
+      const res = await fetch("/api/flashcards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source, apiKey }),
+      });
+      const data: { cards?: Flashcard[]; error?: string } = await res.json();
+      if (!res.ok) {
+        setFlashcardsError(
+          data.error || "Could not generate flashcards. Please try again.",
+        );
+        return;
+      }
+      setFlashcards(data.cards ?? []);
+    } catch {
+      setFlashcardsError("Network error. Check your connection and try again.");
+    } finally {
+      setIsFlashcardsLoading(false);
+    }
+  }
 
   // ── Send a chat message ─────────────────────────────────────────────────--
   // Optimistically renders the student's message, then opens the streaming
@@ -532,6 +608,56 @@ export default function LessonView({ chunks, source }: Props) {
 
           <ReactMarkdown>{lessonBody}</ReactMarkdown>
         </article>
+
+        {/* ── Flashcards ─────────────────────────────────────────────────────
+            Lives at the bottom of the LESSON column (not the chat). Two states:
+              - cards present → a grid of flip cards below the lesson.
+              - none yet      → a sticky "Generate flashcards" bar pinned to the
+                                bottom of the viewport while the lesson scrolls. */}
+        {flashcards && flashcards.length > 0 ? (
+          <section className="mx-auto max-w-3xl px-6 pb-16">
+            <h2 className="mb-1 text-2xl font-semibold tracking-tight text-text">
+              Flashcards
+            </h2>
+            <p className="mb-6 text-sm text-muted">Click a card to flip it.</p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {flashcards.map((card, i) => (
+                <FlipCard key={i} front={card.front} back={card.back} />
+              ))}
+            </div>
+          </section>
+        ) : (
+          // `sticky bottom-0` keeps this CTA pinned to the bottom of the viewport
+          // while the long lesson scrolls. The translucent, blurred background
+          // keeps lesson text legible behind it.
+          <div className="sticky bottom-0 border-t border-white/10 bg-background/85 px-6 py-4 backdrop-blur">
+            <div className="mx-auto flex max-w-3xl flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={generateFlashcards}
+                disabled={isFlashcardsLoading}
+                className="
+                  flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-5 py-2.5
+                  text-sm font-medium text-background transition-colors hover:bg-[#e2bb68]
+                  disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent
+                "
+              >
+                {isFlashcardsLoading && (
+                  <span
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-background/40 border-t-background"
+                  />
+                )}
+                {isFlashcardsLoading ? "Generating flashcards…" : "Generate flashcards"}
+              </button>
+              {flashcardsError && (
+                <p role="alert" className="text-xs text-red-400">
+                  {flashcardsError}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Right: the chat sidebar. `bg-surface` lifts it off the page bg; the
@@ -648,5 +774,48 @@ export default function LessonView({ chunks, source }: Props) {
         </div>
       </aside>
     </div>
+  );
+}
+
+// ── FlipCard ────────────────────────────────────────────────────────────────
+// A single flashcard. Clicking it flips between the question (front) and the
+// answer (back) with a real 3D rotation. We use arbitrary CSS properties
+// ([transform-style:preserve-3d], [backface-visibility:hidden], rotateY) so the
+// flip works regardless of which named 3D utilities Tailwind has enabled. Both
+// faces are absolutely positioned inside a fixed-height button, so the back
+// doesn't need to match the front's length to line up. The back is gold-accented
+// — the "flipped/active" cue the spec calls for. Each card owns its own flip
+// state, so flipping one doesn't touch the others.
+function FlipCard({ front, back }: Flashcard) {
+  const [flipped, setFlipped] = useState(false);
+
+  return (
+    <button
+      type="button"
+      onClick={() => setFlipped((f) => !f)}
+      aria-pressed={flipped}
+      className="h-44 w-full cursor-pointer text-left [perspective:1000px]"
+    >
+      <div
+        className={`
+          relative h-full w-full rounded-2xl transition-transform duration-500
+          [transform-style:preserve-3d]
+          ${flipped ? "[transform:rotateY(180deg)]" : ""}
+        `}
+      >
+        {/* Front — the question/term. */}
+        <div className="absolute inset-0 flex flex-col justify-center gap-2 overflow-y-auto rounded-2xl border border-white/10 bg-surface p-5 [backface-visibility:hidden]">
+          <span className="text-xs uppercase tracking-wide text-muted">Question</span>
+          <p className="text-sm leading-relaxed text-text">{front}</p>
+        </div>
+
+        {/* Back — the answer/definition. Pre-rotated 180° so it reads correctly
+            once the card flips, and gold-accented to signal the flipped state. */}
+        <div className="absolute inset-0 flex flex-col justify-center gap-2 overflow-y-auto rounded-2xl border border-accent/60 bg-accent/5 p-5 [transform:rotateY(180deg)] [backface-visibility:hidden]">
+          <span className="text-xs uppercase tracking-wide text-accent">Answer</span>
+          <p className="text-sm leading-relaxed text-text">{back}</p>
+        </div>
+      </div>
+    </button>
   );
 }
