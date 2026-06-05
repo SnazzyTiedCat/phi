@@ -61,7 +61,7 @@ export default async function AppLayout({
             </span>
             <span
               aria-hidden="true"
-              className="absolute inset-0 flex scale-50 items-center justify-center text-xl font-light text-white opacity-0 transition-all duration-300 group-hover:scale-100 group-hover:opacity-100"
+              className="absolute inset-0 flex scale-50 items-center justify-center text-2xl font-light text-white opacity-0 transition-all duration-300 group-hover:scale-100 group-hover:opacity-100"
             >
               ‹
             </span>
@@ -89,7 +89,7 @@ export default async function AppLayout({
           <Link
             href="/settings"
             aria-label="Settings"
-            className="group relative flex items-center text-base text-muted transition-colors hover:text-text"
+            className="group relative flex items-center leading-none text-2xl text-muted transition-colors hover:text-text"
           >
             <span aria-hidden="true">⚙</span>
             <span
