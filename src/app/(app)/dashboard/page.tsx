@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { greetingForHour } from "@/lib/greeting";
+import Greeting from "./Greeting";
 
 /**
  * The dashboard — the first thing a student sees after logging in.
@@ -85,21 +87,12 @@ export default async function DashboardPage() {
   // decoded-vs-decoded.
   const normalisedSources = sources.map(normalise);
 
-  // ── Time-of-day greeting ──────────────────────────────────────────────────
-  // This is a Server Component, so getHours() reads the SERVER's clock. Heads-up:
-  // on Vercel the server runs in UTC, so the greeting tracks UTC — not the
-  // student's local time. Correcting that needs their timezone (a V2 detail);
-  // for now this is the deliberate, simple server-side version.
-  //   5–11 → morning · 12–16 → afternoon · 17–20 → evening · else (21–4) → night
-  const hour = new Date().getHours();
-  const greeting =
-    hour >= 5 && hour <= 11
-      ? "Good morning"
-      : hour >= 12 && hour <= 16
-        ? "Good afternoon"
-        : hour >= 17 && hour <= 20
-          ? "Good evening"
-          : "Good night";
+  // ── Time-of-day greeting (server fallback) ────────────────────────────────
+  // The server clock is UTC on Vercel, so this value is only a first-paint
+  // fallback — it keeps the greeting word from being missing before hydration.
+  // The <Greeting> client component corrects it to the student's LOCAL time on
+  // mount. Same buckets via the shared helper so the two can't drift.
+  const greeting = greetingForHour(new Date().getHours());
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
@@ -113,11 +106,10 @@ export default async function DashboardPage() {
           overflowing. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          {/* Greeting is time-of-day based off the server clock — see the
-              `greeting` computation above for the buckets and the UTC caveat. */}
-          <h1 className="text-3xl font-semibold tracking-tight text-text">
-            {greeting}, <span className="text-accent">{email}</span>
-          </h1>
+          {/* Greeting reflects the student's LOCAL time-of-day. It's a client
+              component because only the browser knows their timezone; `greeting`
+              here is the server-rendered fallback shown until it hydrates. */}
+          <Greeting initial={greeting} email={email} />
           <p className="mt-2 text-sm text-muted">
             {hasSources
               ? "Pick up where you left off, or upload something new."
