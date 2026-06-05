@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import BackButton from "./BackButton";
 
 /**
  * Layout for the authenticated app: /dashboard, /settings, and anything else
@@ -44,39 +45,10 @@ export default async function AppLayout({
           the page without a heavy bar. */}
       <header className="sticky top-0 z-10 border-b border-white/[0.06] bg-background/80 backdrop-blur-sm">
         <nav className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-6">
-          {/* Left: the φ mark. On hover it spins and shrinks away while a back
-              chevron scales in over it — the logo "melts" into a back button —
-              and a "Dashboard" tooltip slides in from the left, all while still
-              linking to the dashboard. The `group` lives on the Link itself, so
-              every transition keys off hovering the link; the chevron and the
-              tooltip are layered on with absolute positioning. Pure-CSS
-              (group-hover), so no client JS is needed here. */}
-          <Link
-            href="/dashboard"
-            aria-label="Back to dashboard"
-            className="group relative block leading-none"
-          >
-            <span className="block select-none text-2xl font-extralight leading-none tracking-tighter text-accent transition-all duration-300 group-hover:rotate-180 group-hover:scale-50 group-hover:opacity-0">
-              φ
-            </span>
-            <span
-              aria-hidden="true"
-              className="absolute inset-0 flex scale-50 items-center justify-center text-2xl font-light text-white opacity-0 transition-all duration-300 group-hover:scale-100 group-hover:opacity-100"
-            >
-              ‹
-            </span>
-            {/* "Dashboard" tooltip — same left-of-icon pattern as the gear, but
-                with a slide: it starts nudged 8px further left (-translate-x-2)
-                and fades + slides into place on hover. `transition-all` (not just
-                opacity) animates the slide; `-translate-y-1/2` keeps it vertically
-                centred the whole time. */}
-            <span
-              role="tooltip"
-              className="pointer-events-none absolute right-full top-1/2 mr-2 -translate-x-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-surface px-2 py-1 text-xs text-text opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100"
-            >
-              Dashboard
-            </span>
-          </Link>
+          {/* Left: the φ mark that melts into a back button on hover. Extracted
+              into a Client Component because it now navigates with router.back()
+              (real browser-history back), which the server can't do. */}
+          <BackButton />
 
           {/* Right: settings entry, now just the ⚙ gear. With the visible
               "Settings" label gone, the Link carries an aria-label so screen
