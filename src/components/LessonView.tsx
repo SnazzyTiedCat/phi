@@ -744,8 +744,20 @@ export default function LessonView({ chunks, source }: Props) {
           `fixed` lifts it out of flow so it floats over both columns. The deep
           `shadow-2xl shadow-black/50` plus a hairline `ring-white/5` lift it off
           the page so it reads as floating ~6px above the content, not welded to
-          the bottom edge. */}
-      <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-8 rounded-2xl border border-white/8 bg-zinc-900/90 px-8 py-4 shadow-2xl shadow-black/50 ring-1 ring-white/5 backdrop-blur-xl">
+          the bottom edge. While flashcards are generating, the quiet white ring
+          swaps for a pulsing amber one (ring-2 ring-amber-400/60 animate-pulse)
+          so the whole bubble glows as a "working" cue; `transition-all` smooths
+          the swap back to rest. (I intentionally did NOT add `relative` here:
+          `fixed` already establishes the positioning context, and Tailwind emits
+          `relative` after `fixed`, so adding both would override the fixed pin
+          and the bar would scroll away.) */}
+      <div
+        className={`fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-8 rounded-2xl border border-white/8 bg-zinc-900/90 px-8 py-4 shadow-2xl shadow-black/50 backdrop-blur-xl transition-all ${
+          isFlashcardsLoading
+            ? "animate-pulse ring-2 ring-amber-400/60"
+            : "ring-1 ring-white/5"
+        }`}
+      >
         {/* Flashcards toggle — amber when the panel is open, otherwise a quiet
             white/60 that brightens on hover. */}
         <button
