@@ -46,10 +46,11 @@ export default async function AppLayout({
         <nav className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-6">
           {/* Left: the φ mark. On hover it spins and shrinks away while a back
               chevron scales in over it — the logo "melts" into a back button —
-              while still linking to the dashboard. The `group` lives on the Link
-              itself, so both transforms key off hovering the link; the chevron is
-              layered on top with absolute positioning. Pure-CSS (group-hover),
-              so no client JS is needed here. */}
+              and a "Dashboard" tooltip slides in from the left, all while still
+              linking to the dashboard. The `group` lives on the Link itself, so
+              every transition keys off hovering the link; the chevron and the
+              tooltip are layered on with absolute positioning. Pure-CSS
+              (group-hover), so no client JS is needed here. */}
           <Link
             href="/dashboard"
             aria-label="Back to dashboard"
@@ -64,14 +65,27 @@ export default async function AppLayout({
             >
               ‹
             </span>
+            {/* "Dashboard" tooltip — same left-of-icon pattern as the gear, but
+                with a slide: it starts nudged 8px further left (-translate-x-2)
+                and fades + slides into place on hover. `transition-all` (not just
+                opacity) animates the slide; `-translate-y-1/2` keeps it vertically
+                centred the whole time. */}
+            <span
+              role="tooltip"
+              className="pointer-events-none absolute right-full top-1/2 mr-2 -translate-x-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-surface px-2 py-1 text-xs text-text opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100"
+            >
+              Dashboard
+            </span>
           </Link>
 
           {/* Right: settings entry, now just the ⚙ gear. With the visible
               "Settings" label gone, the Link carries an aria-label so screen
               readers still announce it (the glyph stays aria-hidden). On hover a
-              small tooltip fades in ABOVE the icon: `group` on the Link drives
-              the fade, `relative` anchors the absolutely-positioned tooltip, and
-              `pointer-events-none` stops the tooltip from eating the click. */}
+              small tooltip fades in to the LEFT of the icon: `group` on the Link
+              drives the fade, `relative` anchors the absolutely-positioned
+              tooltip (`right-full mr-2` sits it just left of the gear, `top-1/2
+              -translate-y-1/2` centres it vertically), and `pointer-events-none`
+              stops the tooltip from eating the click. */}
           <Link
             href="/settings"
             aria-label="Settings"
@@ -80,7 +94,7 @@ export default async function AppLayout({
             <span aria-hidden="true">⚙</span>
             <span
               role="tooltip"
-              className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-surface px-2 py-1 text-xs text-text opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+              className="pointer-events-none absolute right-full top-1/2 mr-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-surface px-2 py-1 text-xs text-text opacity-0 transition-opacity duration-200 group-hover:opacity-100"
             >
               Settings
             </span>
