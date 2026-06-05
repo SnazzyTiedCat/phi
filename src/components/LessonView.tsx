@@ -3,6 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
+import {
+  Squares2X2Icon,
+  PlayIcon,
+  PauseIcon,
+  ChatBubbleLeftIcon,
+} from "@heroicons/react/24/outline";
 
 /**
  * LessonView — the interactive half of the lesson page.
@@ -737,42 +743,52 @@ export default function LessonView({ chunks, source }: Props) {
           controls: toggle flashcards, play/pause read-aloud (gold), toggle chat.
           `fixed` lifts it out of flow so it floats over both columns. */}
       <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-6 rounded-full border border-white/10 bg-black/80 px-6 py-3 backdrop-blur-md">
-        {/* Flashcards toggle — gold when the panel is open. */}
+        {/* Flashcards toggle — amber when the panel is open, otherwise a quiet
+            white/60 that brightens on hover. */}
         <button
           type="button"
           onClick={() => setFlashcardsOpen((open) => !open)}
           aria-label="Toggle flashcards"
           aria-pressed={flashcardsOpen}
-          className={`cursor-pointer text-lg leading-none transition-colors ${
-            flashcardsOpen ? "text-accent" : "text-muted hover:text-text"
-          }`}
+          className="cursor-pointer"
         >
-          <span aria-hidden="true">▦</span>
+          <Squares2X2Icon
+            className={`h-5 w-5 transition-colors ${
+              flashcardsOpen ? "text-amber-400" : "text-white/60 hover:text-white"
+            }`}
+          />
         </button>
 
-        {/* Play/Pause read-aloud (gold) — the existing Web Speech logic.
-            Disabled (dimmed) if the browser can't speak. */}
+        {/* Play/Pause read-aloud — the existing Web Speech logic. Gold (amber)
+            while actually playing, quiet white/60 when idle, dimmed if the
+            browser can't speak at all. */}
         <button
           type="button"
           onClick={isPlaying ? pauseAudio : playAudio}
           disabled={!supportsSpeech}
           aria-label={isPlaying ? "Pause read-aloud" : "Play read-aloud"}
-          className="cursor-pointer text-lg leading-none text-accent transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-30"
+          className="cursor-pointer transition-opacity disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <span aria-hidden="true">{isPlaying ? "⏸" : "▶"}</span>
+          {isPlaying ? (
+            <PauseIcon className="h-5 w-5 text-amber-400" />
+          ) : (
+            <PlayIcon className="h-5 w-5 text-white/60 transition-colors hover:text-white" />
+          )}
         </button>
 
-        {/* Chat toggle — gold when the sidebar is expanded. */}
+        {/* Chat toggle — amber when the sidebar is expanded. */}
         <button
           type="button"
           onClick={() => setChatOpen((open) => !open)}
           aria-label="Toggle chat"
           aria-pressed={chatOpen}
-          className={`cursor-pointer text-lg leading-none transition-colors ${
-            chatOpen ? "text-accent" : "text-muted hover:text-text"
-          }`}
+          className="cursor-pointer"
         >
-          <span aria-hidden="true">💬</span>
+          <ChatBubbleLeftIcon
+            className={`h-5 w-5 transition-colors ${
+              chatOpen ? "text-amber-400" : "text-white/60 hover:text-white"
+            }`}
+          />
         </button>
       </div>
     </div>
