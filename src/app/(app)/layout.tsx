@@ -66,16 +66,24 @@ export default async function AppLayout({
             </span>
           </Link>
 
-          {/* Right: settings entry. The ⚙ is a Unicode glyph so we don't pull
-              in an icon library for the MVP. aria-hidden on the glyph keeps it
-              from being announced twice by screen readers — the visible
-              "Settings" word carries the meaning. */}
+          {/* Right: settings entry, now just the ⚙ gear. With the visible
+              "Settings" label gone, the Link carries an aria-label so screen
+              readers still announce it (the glyph stays aria-hidden). On hover a
+              small tooltip fades in ABOVE the icon: `group` on the Link drives
+              the fade, `relative` anchors the absolutely-positioned tooltip, and
+              `pointer-events-none` stops the tooltip from eating the click. */}
           <Link
             href="/settings"
-            className="flex items-center gap-2 text-sm text-muted transition-colors hover:text-text"
+            aria-label="Settings"
+            className="group relative flex items-center text-base text-muted transition-colors hover:text-text"
           >
             <span aria-hidden="true">⚙</span>
-            Settings
+            <span
+              role="tooltip"
+              className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-surface px-2 py-1 text-xs text-text opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+            >
+              Settings
+            </span>
           </Link>
         </nav>
       </header>
