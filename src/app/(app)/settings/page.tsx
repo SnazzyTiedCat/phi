@@ -8,14 +8,15 @@ import { createClient } from "@/lib/supabase/client";
  *
  * WHY this is a Client Component ("use client"):
  * localStorage only exists in the browser. A Server Component can't read or
- * write it. Since the whole job of this page is reading/writing two keys from
- * localStorage, the entire page is a client component.
+ * write it. Since the whole job of this page is reading/writing the Anthropic
+ * key from localStorage, the entire page is a client component.
  *
  * WHY localStorage (and not the database) for the MVP:
- * Per the project plan, keys stay in the browser for now — simple, private, no
- * server involvement. They migrate to secure Supabase storage in V2. The exact
- * storage keys ("phi_anthropic_key" / "phi_elevenlabs_key") are a contract:
- * anything else that needs these keys later must read the SAME names.
+ * Per the project plan, the key stays in the browser for now — simple, private,
+ * no server involvement. It migrates to secure Supabase storage in V2. The exact
+ * storage key ("phi_anthropic_key") is a contract: anything else that needs the
+ * key later must read the SAME name. (Read-aloud used to also store an ElevenLabs
+ * key here; that's gone — TTS now uses the browser's keyless Web Speech API.)
  *
  * Note: this page sits inside the (app) route group, so the server-side auth
  * gate in (app)/layout.tsx already protects it — a logged-out user never gets
@@ -24,11 +25,9 @@ import { createClient } from "@/lib/supabase/client";
 
 // Centralized so the read (useEffect) and write (handleSave) can't drift apart.
 const ANTHROPIC_KEY = "phi_anthropic_key";
-const ELEVENLABS_KEY = "phi_elevenlabs_key";
 
 export default function SettingsPage() {
   const [anthropicKey, setAnthropicKey] = useState("");
-  const [elevenLabsKey, setElevenLabsKey] = useState("");
   const [saved, setSaved] = useState(false);
 
   // ── Account / email confirmation ──────────────────────────────────────────
@@ -44,7 +43,7 @@ export default function SettingsPage() {
   const [resendSuccess, setResendSuccess] = useState(false);
   const [resendError, setResendError] = useState("");
 
-  // On mount, hydrate the inputs from localStorage. The empty dependency array
+  // On mount, hydrate the input from localStorage. The empty dependency array
   // means this runs ONCE after the first render. We can't read localStorage
   // during render or as the initial useState value because this code is
   // server-rendered first (where `window`/localStorage don't exist) — doing so
@@ -52,7 +51,6 @@ export default function SettingsPage() {
   // browser, which is exactly where localStorage lives.
   useEffect(() => {
     setAnthropicKey(localStorage.getItem(ANTHROPIC_KEY) ?? "");
-    setElevenLabsKey(localStorage.getItem(ELEVENLABS_KEY) ?? "");
   }, []);
 
   // Fetch the signed-in user from the BROWSER Supabase client to learn their
@@ -81,10 +79,9 @@ export default function SettingsPage() {
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
 
-    // Write both keys under their fixed names. We trim to avoid storing a stray
-    // space the user pasted in — API keys never have leading/trailing spaces.
+    // Write the key under its fixed name. We trim to avoid storing a stray space
+    // the user pasted in — API keys never have leading/trailing spaces.
     localStorage.setItem(ANTHROPIC_KEY, anthropicKey.trim());
-    localStorage.setItem(ELEVENLABS_KEY, elevenLabsKey.trim());
 
     // Flash the success message, then auto-hide it after 2s so the UI settles
     // back to a calm resting state.
@@ -130,8 +127,8 @@ export default function SettingsPage() {
         Settings
       </h1>
       <p className="mt-2 text-sm text-muted">
-        Your API keys are stored only in this browser. They never touch our
-        servers.
+        Your Anthropic API key is stored only in this browser. It never touches
+        our servers.
       </p>
 
       {/* Same card styling as the auth form for a consistent product feel. */}
@@ -156,24 +153,6 @@ export default function SettingsPage() {
             onChange={(e) => setAnthropicKey(e.target.value)}
             className="w-full rounded-lg border border-white/[0.08] bg-background px-4 py-3 text-sm text-text outline-none transition-colors placeholder:text-muted/60 focus:border-accent/60"
             placeholder="sk-ant-..."
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label
-            htmlFor="elevenlabs-key"
-            className="block text-xs font-medium uppercase tracking-wider text-muted"
-          >
-            ElevenLabs API key
-          </label>
-          <input
-            id="elevenlabs-key"
-            type="password"
-            autoComplete="off"
-            value={elevenLabsKey}
-            onChange={(e) => setElevenLabsKey(e.target.value)}
-            className="w-full rounded-lg border border-white/[0.08] bg-background px-4 py-3 text-sm text-text outline-none transition-colors placeholder:text-muted/60 focus:border-accent/60"
-            placeholder="..."
           />
         </div>
 
