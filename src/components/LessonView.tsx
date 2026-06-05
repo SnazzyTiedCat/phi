@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import {
@@ -580,6 +580,7 @@ export default function LessonView({ chunks, source }: Props) {
             none yet. `pb-28` clears the floating bar so the last card isn't
             hidden behind it. */}
         {flashcardsOpen && (
+          <SpringIn>
           <section className="mx-auto max-w-3xl px-6 pb-28">
             {flashcards && flashcards.length > 0 ? (
               <>
@@ -619,6 +620,7 @@ export default function LessonView({ chunks, source }: Props) {
               </div>
             )}
           </section>
+          </SpringIn>
         )}
       </main>
 
@@ -806,6 +808,39 @@ export default function LessonView({ chunks, source }: Props) {
           />
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── SpringIn ──────────────────────────────────────────────────────────────--
+// Wraps its children in a one-shot entrance: they mount hidden (faded out and
+// nudged 4px down), then on the next animation frame transition into place. The
+// flip deliberately lives in a CHILD component, not the parent, because this
+// wrapper mounts and unmounts WITH the flashcards panel — so every time the
+// panel opens the entrance replays, and the "have I animated yet?" state resets
+// itself simply by unmounting (no effect cleanup needed to reset it).
+//
+// Why requestAnimationFrame instead of setting state straight in the effect:
+//   1. It defers the flip to AFTER the browser has painted the hidden state, so
+//      the transition actually has a "from" frame to animate out of (set it in
+//      the same tick and the element would just appear already-visible).
+//   2. setState inside an rAF callback isn't a synchronous effect-body update,
+//      so it sidesteps React's "avoid setState directly within an effect" rule.
+function SpringIn({ children }: { children: ReactNode }) {
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  return (
+    <div
+      className={`transition-all duration-300 ease-out ${
+        shown ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+      }`}
+    >
+      {children}
     </div>
   );
 }
