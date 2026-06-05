@@ -56,17 +56,55 @@ Phi’s real moat: **it’s deep where NotebookLM is wide.** Phi does one thing 
 
 Ship exactly this. Nothing more.
 
-- [ ] Auth (sign up / log in via Supabase)
-- [ ] Settings page — API key storage in localStorage (Anthropic + ElevenLabs)
-- [ ] File upload (PDF / text)
-- [ ] RAG pipeline — chunk, embed, store in pgvector
-- [ ] Lesson structuring — AI breaks content into titled lessons on upload
-- [ ] Lesson view — AI teaches the content, ElevenLabs reads aloud
-- [ ] Chat sidebar — pause, explain simply, skip ahead
-- [ ] Flashcards generated from lesson content
-- [ ] Basic quiz
+- [x] ✅ Auth (sign up / log in via Supabase)
+- [x] ✅ Settings page — API key storage in localStorage (Anthropic + ElevenLabs)
+- [x] ✅ File upload (PDF / text)
+- [ ] 🚧 RAG pipeline — chunk, embed, store in pgvector (chunking done; real embeddings + pgvector search not yet wired up)
+- [x] ✅ Lesson structuring — AI breaks content into titled lessons on upload
+- [x] ✅ Lesson view — AI teaches the content, ElevenLabs reads aloud
+- [x] ✅ Chat sidebar — pause, explain simply, skip ahead
+- [x] ✅ Flashcards generated from lesson content
+- [ ] 🚧 Basic quiz (in progress — not yet built)
 
 **Exit condition:** A student can upload their data science textbook, get structured lessons, read along with audio, ask the chat questions mid-lesson, and get flashcards at the end.
+
+-----
+
+## Current State
+
+What has actually been built and is running as of June 2026.
+
+**Routes live**
+
+| Route | Status | Notes |
+|---|---|---|
+| `/login`, `/signup` | Done | Supabase SSR auth; redirects to `/dashboard` on success |
+| `/dashboard` | Done | Source grid; "Continue learning" vs "Start learning" based on cached lesson |
+| `/upload` | Done | PDF + .txt upload; disclaimer and next-step hint |
+| `/lesson?source=<name>` | Done | Server fetches chunks → `LessonView` (client) generates + renders lesson |
+| `/settings` | Done | Anthropic API key only — ElevenLabs field removed |
+
+**API routes live**
+
+| Endpoint | Status | Notes |
+|---|---|---|
+| `POST /api/upload` | Done | `unpdf` for PDFs; ~500-token chunks; stored in Supabase with zero-vector placeholder embeddings |
+| `POST /api/lesson` | Done | Claude `claude-opus-4-7`; cached to `lessons` table; subsequent visits return instantly |
+| `POST /api/chat` | Done | RAG from chunks table; streamed reply via `text/plain`; full conversation history |
+| `GET /api/flashcards` | Done | Cache-only read; no Claude call |
+| `POST /api/flashcards` | Done | Claude `claude-sonnet-4-6`; cached to `flashcards` table |
+
+**Features in the lesson view**
+
+- Read-aloud via browser Web Speech API (no key, no dependency) — play/pause/stop with markdown stripping
+- Chat sidebar with real-time streaming and auto-scroll
+- Flip-card flashcards with 3D CSS rotation; generate-on-demand then cached per source
+- Floating action bar toggles: flashcards panel, read-aloud, chat sidebar
+
+**Not yet built**
+
+- Quiz (listed in MVP scope; no route or UI exists yet)
+- Real vector embeddings (zero-vector placeholders stored; pgvector similarity search not wired up)
 
 -----
 
@@ -81,6 +119,10 @@ Everything below goes here. Not in the codebase. Not in a branch. Here.
 - Mobile via Capacitor (iOS + Android)
 - API keys migrated from localStorage to Supabase (secure server-side storage)
 - Monetization / grant applications / partnerships
+- ElevenLabs TTS integration (human-quality voice; replaces Web Speech API)
+- OpenAI TTS as an ElevenLabs alternative
+- Chat history persistence (currently in-memory only; lost on page reload)
+- Quiz generation
 
 -----
 
@@ -92,7 +134,7 @@ Everything below goes here. Not in the codebase. Not in a branch. Here.
 |Styling                      |Tailwind CSS only               |No Framer Motion — Tailwind animations are enough for MVP         |
 |Auth + DB + Storage + Vectors|Supabase                        |One service covers auth, file storage, relational DB, and pgvector|
 |AI tutor engine              |Anthropic Claude API            |Lesson structuring, chat, flashcards, quiz generation             |
-|Read-aloud                   |ElevenLabs API                  |Best-quality TTS, human-feeling voice                             |
+|Read-aloud                   |Browser Web Speech API (MVP) / ElevenLabs (V2)|Zero-dependency, keyless TTS built into every modern browser; ElevenLabs deferred to V2 for human-quality voice|
 |Deployment                   |Vercel                          |Free tier, deploys from GitHub, zero config                       |
 |API key storage              |localStorage (MVP)              |Simple, private, no server involvement — migrate to Supabase in V2|
 
@@ -133,12 +175,12 @@ Strong system prompts produce 95% of fine-tuning’s benefit at 1% of the cost. 
 ## Build Order
 
 ```
-Week 1  → Project setup, auth, settings page, API key storage in localStorage
-Week 2  → File upload + RAG pipeline (chunk, embed, pgvector)
-Week 3  → Lesson structuring + lesson view UI
-Week 4  → ElevenLabs TTS integration + chat sidebar
-Week 5  → Flashcards + quiz generation
-Week 6  → Polish + deploy to Vercel
+✅ Week 1  → Project setup, auth, settings page, API key storage in localStorage
+✅ Week 2  → File upload + RAG pipeline (chunk, embed, pgvector)
+✅ Week 3  → Lesson structuring + lesson view UI
+✅ Week 4  → TTS integration (Web Speech API, MVP) + chat sidebar
+   Week 5  → Flashcards + quiz generation
+   Week 6  → Polish + deploy to Vercel
 ```
 
 -----
