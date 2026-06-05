@@ -168,11 +168,24 @@ export default function UploadPage() {
           />
         </div>
 
+        {/* File-type expectation, set here so a student with a scanned PDF
+            learns the limit up front — not after an OCR-empty upload. Muted +
+            xs: available, not shouting. Sits tight under the drop zone. */}
+        <p className="mt-3 text-xs text-muted">
+          Text-based PDFs and .txt files only. Scanned or image-based PDFs are
+          not supported.
+        </p>
+
+        {/* One calm line on what the button does, grouped just above it. */}
+        <p className="mt-6 text-xs text-muted">
+          Phi will read your material and build a structured lesson.
+        </p>
+
         <button
           type="button"
           onClick={handleUpload}
           disabled={!file || isUploading}
-          className="mt-6 inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-300 hover:bg-[#e2bb68] hover:scale-[1.03] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+          className="mt-3 inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-300 hover:bg-[#e2bb68] hover:scale-[1.03] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
         >
           {isUploading ? "Processing…" : "Upload and process"}
         </button>
