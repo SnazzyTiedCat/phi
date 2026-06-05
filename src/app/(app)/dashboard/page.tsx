@@ -85,6 +85,22 @@ export default async function DashboardPage() {
   // decoded-vs-decoded.
   const normalisedSources = sources.map(normalise);
 
+  // ── Time-of-day greeting ──────────────────────────────────────────────────
+  // This is a Server Component, so getHours() reads the SERVER's clock. Heads-up:
+  // on Vercel the server runs in UTC, so the greeting tracks UTC — not the
+  // student's local time. Correcting that needs their timezone (a V2 detail);
+  // for now this is the deliberate, simple server-side version.
+  //   5–11 → morning · 12–16 → afternoon · 17–20 → evening · else (21–4) → night
+  const hour = new Date().getHours();
+  const greeting =
+    hour >= 5 && hour <= 11
+      ? "Good morning"
+      : hour >= 12 && hour <= 16
+        ? "Good afternoon"
+        : hour >= 17 && hour <= 20
+          ? "Good evening"
+          : "Good night";
+
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
       {/* ── Header row: greeting + persistent "Upload material" action ─────────
@@ -97,10 +113,10 @@ export default async function DashboardPage() {
           overflowing. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          {/* "Good morning" is hardcoded for the MVP — no time-of-day logic yet
-              (it'd need the user's timezone to be correct, a V2 detail). */}
+          {/* Greeting is time-of-day based off the server clock — see the
+              `greeting` computation above for the buckets and the UTC caveat. */}
           <h1 className="text-3xl font-semibold tracking-tight text-text">
-            Good morning, <span className="text-accent">{email}</span>
+            {greeting}, <span className="text-accent">{email}</span>
           </h1>
           <p className="mt-2 text-sm text-muted">
             {hasSources
