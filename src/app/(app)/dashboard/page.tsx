@@ -148,7 +148,7 @@ export default async function DashboardPage() {
             <Link
               key={source}
               href={`/lesson?source=${encodeURIComponent(source)}`}
-              className="group flex flex-col rounded-2xl border border-white/10 bg-surface/40 p-5 transition-all duration-300 hover:border-white/20 hover:-translate-y-0.5"
+              className="group flex cursor-pointer flex-col rounded-2xl border border-white/10 bg-surface/40 p-5 transition-all duration-200 hover:border-white/20 hover:bg-white/5 hover:-translate-y-0.5"
             >
               {/* Gold φ icon. `aria-hidden` because it's decorative — the
                   filename below already names the card for screen readers. */}
