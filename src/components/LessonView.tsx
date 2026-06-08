@@ -529,49 +529,10 @@ export default function LessonView({ chunks, source }: Props) {
   }
 
   // ── Loading ─────────────────────────────────────────────────────────────--
-  // Skeleton that mirrors the lesson layout: wide title block, narrower subtitle,
-  // then a series of paragraph-width bars. `animate-pulse` fades them in and out
-  // so the screen feels alive. All blocks use bg-surface (the dark card color
-  // from globals.css) — slightly lighter than the page background, visible but
-  // not jarring against the dark theme.
+  // Extracted to its own component because it owns a ticking interval (the
+  // rotating status line), and hooks can't live inside this conditional branch.
   if (status === "loading") {
-    return (
-      <div
-        aria-label="Loading lesson…"
-        aria-busy="true"
-        className="mx-auto max-w-3xl px-6 py-12 animate-pulse"
-      >
-        {/* Title */}
-        <div className="h-9 w-2/3 rounded-lg bg-surface" />
-        {/* Subtitle / intro line */}
-        <div className="mt-4 h-5 w-1/2 rounded bg-surface" />
-
-        {/* First section */}
-        <div className="mt-12 h-6 w-2/5 rounded-lg bg-surface" />
-        <div className="mt-4 space-y-2">
-          <div className="h-4 w-full rounded bg-surface" />
-          <div className="h-4 w-full rounded bg-surface" />
-          <div className="h-4 w-4/5 rounded bg-surface" />
-        </div>
-
-        {/* Second section */}
-        <div className="mt-10 h-6 w-1/3 rounded-lg bg-surface" />
-        <div className="mt-4 space-y-2">
-          <div className="h-4 w-full rounded bg-surface" />
-          <div className="h-4 w-11/12 rounded bg-surface" />
-          <div className="h-4 w-3/4 rounded bg-surface" />
-        </div>
-
-        {/* Third section */}
-        <div className="mt-10 h-6 w-2/5 rounded-lg bg-surface" />
-        <div className="mt-4 space-y-2">
-          <div className="h-4 w-full rounded bg-surface" />
-          <div className="h-4 w-5/6 rounded bg-surface" />
-          <div className="h-4 w-full rounded bg-surface" />
-          <div className="h-4 w-2/3 rounded bg-surface" />
-        </div>
-      </div>
-    );
+    return <LessonLoading />;
   }
 
   // ── Error ───────────────────────────────────────────────────────────────--
@@ -987,6 +948,88 @@ function SpringIn({ children }: { children: ReactNode }) {
       }`}
     >
       {children}
+    </div>
+  );
+}
+
+// ── LessonLoading ───────────────────────────────────────────────────────────
+// The screen shown while /api/lesson is generating. Three parts:
+//   1. a gold φ that spins like a loader (the brand mark doubling as the
+//      spinner — on-brand, no extra asset),
+//   2. a status line that cycles every 2s so the wait feels narrated rather than
+//      stalled, and
+//   3. a skeleton of the lesson layout that pulses in a slightly lighter shade.
+// It's its own component because the cycling line needs state + an interval, and
+// React hooks can't be called inside LessonView's conditional `status` branches.
+const LOADING_MESSAGES = [
+  "Reading your material…",
+  "Building your lesson…",
+  "Almost ready…",
+];
+
+function LessonLoading() {
+  // Which status line is showing. Advances on a 2s interval, wrapping back to
+  // the start — so on a long generation it keeps cycling rather than getting
+  // stuck on "Almost ready…".
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setPhase((p) => (p + 1) % LOADING_MESSAGES.length);
+    }, 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div
+      aria-label="Loading lesson…"
+      aria-busy="true"
+      className="mx-auto max-w-3xl px-6 py-12"
+    >
+      {/* φ spinner + rotating status line. The φ is 1.5rem (text-2xl) and spins;
+          the line is keyed on `phase` so each new message replays the page-in
+          fade as it swaps. */}
+      <div className="flex flex-col items-center gap-3 pb-12 text-center">
+        <span
+          aria-hidden="true"
+          className="animate-spin text-2xl font-extralight leading-none text-accent"
+        >
+          φ
+        </span>
+        <p key={phase} className="animate-page-in text-sm text-muted">
+          {LOADING_MESSAGES[phase]}
+        </p>
+      </div>
+
+      {/* Skeleton — mirrors the lesson's shape (title, subtitle, three sections)
+          so the real content lands roughly where the bars were. bg-zinc-800 is a
+          touch lighter than the page so the pulse reads clearly on the dark base. */}
+      <div className="animate-pulse">
+        <div className="h-9 w-2/3 rounded bg-zinc-800" />
+        <div className="mt-4 h-5 w-1/2 rounded bg-zinc-800" />
+
+        <div className="mt-12 h-6 w-2/5 rounded bg-zinc-800" />
+        <div className="mt-4 space-y-2">
+          <div className="h-4 w-full rounded bg-zinc-800" />
+          <div className="h-4 w-full rounded bg-zinc-800" />
+          <div className="h-4 w-4/5 rounded bg-zinc-800" />
+        </div>
+
+        <div className="mt-10 h-6 w-1/3 rounded bg-zinc-800" />
+        <div className="mt-4 space-y-2">
+          <div className="h-4 w-full rounded bg-zinc-800" />
+          <div className="h-4 w-11/12 rounded bg-zinc-800" />
+          <div className="h-4 w-3/4 rounded bg-zinc-800" />
+        </div>
+
+        <div className="mt-10 h-6 w-2/5 rounded bg-zinc-800" />
+        <div className="mt-4 space-y-2">
+          <div className="h-4 w-full rounded bg-zinc-800" />
+          <div className="h-4 w-5/6 rounded bg-zinc-800" />
+          <div className="h-4 w-full rounded bg-zinc-800" />
+          <div className="h-4 w-2/3 rounded bg-zinc-800" />
+        </div>
+      </div>
     </div>
   );
 }
