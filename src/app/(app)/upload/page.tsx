@@ -1,10 +1,20 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Status = "idle" | "uploading" | "done" | "error";
 type UploadResponse = { count: number };
+
+// The narrated steps shown while an upload is in flight. These are reassurance,
+// not telemetry — the real /api/upload call runs in parallel and we have no
+// progress events from it, so we pace these with timers to set honest
+// expectations ("this takes a few seconds and here's roughly what's happening").
+const UPLOAD_STEPS = [
+  "Reading your file…",
+  "Breaking into chunks…",
+  "Saving to your library…",
+];
 
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -14,6 +24,23 @@ export default function UploadPage() {
   // Captured at the moment of success so the success panel can show it even
   // after `file` is cleared by a reset.
   const [successFileName, setSuccessFileName] = useState<string | null>(null);
+
+  // Which narrated step we're on: 0 = none, 1/2/3 = the steps in UPLOAD_STEPS.
+  // A step is "shown" once we reach it, "active" while it's the current one, and
+  // "complete" once a later step arrives — so they accumulate top-to-bottom.
+  const [step, setStep] = useState(0);
+  // The pending step timers, held so we can cancel them the instant the real
+  // request resolves (or the component unmounts) — otherwise a late setStep
+  // would fire after we've already moved to the success/error state.
+  const stepTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  function clearStepTimers() {
+    stepTimers.current.forEach(clearTimeout);
+    stepTimers.current = [];
+  }
+
+  // Cancel any in-flight step timers if the user navigates away mid-upload.
+  useEffect(() => clearStepTimers, []);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const ACCEPTED = [".pdf", ".txt"];
@@ -36,6 +63,8 @@ export default function UploadPage() {
   }
 
   function resetForm() {
+    clearStepTimers();
+    setStep(0);
     setFile(null);
     setSuccessFileName(null);
     setStatus("idle");
@@ -71,13 +100,26 @@ export default function UploadPage() {
     setStatus("uploading");
     setErrorMessage("");
 
+    // Kick off the narrated steps: step 1 immediately, step 2 at 1s, step 3 at
+    // 2s. Clear first so a quick retry doesn't stack two sets of timers.
+    clearStepTimers();
+    setStep(1);
+    stepTimers.current = [
+      setTimeout(() => setStep(2), 1000),
+      setTimeout(() => setStep(3), 2000),
+    ];
+
     try {
       const body = new FormData();
       body.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body });
       const data: UploadResponse | { error?: string } = await res.json();
 
+      // The real request resolved — stop narrating, whatever the outcome.
+      clearStepTimers();
+
       if (!res.ok) {
+        setStep(0);
         setStatus("error");
         setErrorMessage(
           ("error" in data && data.error) || "Upload failed. Please try again.",
@@ -89,6 +131,8 @@ export default function UploadPage() {
       setSuccessFileName(file.name);
       setStatus("done");
     } catch {
+      clearStepTimers();
+      setStep(0);
       setStatus("error");
       setErrorMessage("Network error. Check your connection and try again.");
     }
@@ -189,6 +233,49 @@ export default function UploadPage() {
         >
           {isUploading ? "Processing…" : "Upload and process"}
         </button>
+
+        {/* Narrated progress. Each step fades + slides in once we reach it
+            (visible = step >= n), the current one spins, finished ones get a
+            gold check — so the list reads as a checklist filling in. Only
+            mounted while uploading; the whole panel then fades out into the
+            success state. aria-live announces each new step to screen readers. */}
+        {isUploading && (
+          <ol className="mt-6 space-y-3" aria-live="polite">
+            {UPLOAD_STEPS.map((label, i) => {
+              const n = i + 1;
+              const isActive = step === n;
+              const isComplete = step > n;
+              const isVisible = step >= n;
+              return (
+                <li
+                  key={label}
+                  className={`flex items-center gap-3 text-sm transition-all duration-300 ${
+                    isVisible
+                      ? "translate-x-0 opacity-100"
+                      : "-translate-x-1 opacity-0"
+                  } ${isActive ? "text-text" : "text-muted"}`}
+                >
+                  {isComplete ? (
+                    <span aria-hidden="true" className="text-accent">
+                      ✓
+                    </span>
+                  ) : isActive ? (
+                    <span
+                      aria-hidden="true"
+                      className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent"
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="inline-block h-3.5 w-3.5 shrink-0 rounded-full border border-white/15"
+                    />
+                  )}
+                  <span>{label}</span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
 
         <div role="status" className="mt-4 text-sm">
           {status === "error" && (
