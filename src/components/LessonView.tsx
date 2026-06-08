@@ -468,6 +468,9 @@ export default function LessonView({ chunks, source }: Props) {
   // Resuming when paused is what makes the play/pause button behave like a real
   // player.
   function playAudio() {
+    // Defensive: the button is disabled when speech is unsupported, but guard
+    // anyway so this can never throw on a missing API.
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     const synth = window.speechSynthesis;
 
     // Mid-read and paused → resume. No new utterance.
@@ -479,16 +482,26 @@ export default function LessonView({ chunks, source }: Props) {
     // Already speaking (and not paused) → nothing to do.
     if (synth.speaking) return;
 
+    // EDGE CASE: a lesson with no speakable text (e.g. only code blocks, which
+    // stripMarkdown removes) would produce a silent utterance whose `onend` may
+    // never fire — leaving the icon stuck on Pause with nothing playing. Bail
+    // before we flip to the "playing" state so the button can't lie.
+    const text = stripMarkdown(lesson);
+    if (!text) return;
+
     // Fresh start. Cancel anything stale first so we never queue two readings.
     synth.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(stripMarkdown(lesson));
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.95; // a touch slower than default — easier to follow
     utterance.pitch = 1.0; // natural pitch
     // onend is the one transition the user doesn't trigger by hand: it fires
     // both when the lesson finishes on its own AND when Stop cancels it, so it's
     // where we flip the icon back to ▶.
     utterance.onend = () => setIsPlaying(false);
+    // EDGE CASE: if synthesis errors (voice fails to load, interrupted, etc.)
+    // `onend` won't fire — reset here too so the icon doesn't stay on Pause.
+    utterance.onerror = () => setIsPlaying(false);
 
     utteranceRef.current = utterance;
     synth.speak(utterance);
