@@ -746,18 +746,24 @@ export default function LessonView({ chunks, source }: Props) {
           ) : (
             messages.map((m, i) =>
               m.role === "user" ? (
-                // User: right-aligned, faint accent-tinted bubble.
-                <div key={i} className="flex justify-end">
-                  <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-accent/10 px-3.5 py-2 text-sm leading-relaxed text-text">
-                    {m.content}
-                  </p>
-                </div>
+                // User: right-aligned, faint accent-tinted bubble. Wrapped in
+                // MessageIn so it fades + slides in on arrival.
+                <MessageIn key={i}>
+                  <div className="flex justify-end">
+                    <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-accent/10 px-3.5 py-2 text-sm leading-relaxed text-text">
+                      {m.content}
+                    </p>
+                  </div>
+                </MessageIn>
               ) : (
                 // Assistant: left-aligned, markdown-rendered. Same ReactMarkdown
                 // used for the lesson, but with lighter chat-appropriate styles
                 // (tighter spacing, smaller code blocks). Empty content while
-                // streaming shows a pulsing placeholder.
-                <div key={i} className="text-sm leading-relaxed text-text">
+                // streaming shows a pulsing placeholder. The bubble animates in
+                // once (the empty placeholder mounts inside MessageIn); streamed
+                // tokens update it in place without re-triggering the entrance.
+                <MessageIn key={i}>
+                  <div className="text-sm leading-relaxed text-text">
                   {m.content.length > 0 ? (
                     <div
                       className="
@@ -777,7 +783,8 @@ export default function LessonView({ chunks, source }: Props) {
                   ) : (
                     <span className="text-muted animate-pulse">Phi is thinking…</span>
                   )}
-                </div>
+                  </div>
+                </MessageIn>
               ),
             )
           )}
@@ -945,6 +952,35 @@ function SpringIn({ children }: { children: ReactNode }) {
     <div
       className={`transition-all duration-300 ease-out ${
         shown ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── MessageIn ───────────────────────────────────────────────────────────────
+// A chat-bubble entrance: mounts faded + nudged 1px down, then flips into place
+// on the next animation frame. Same rAF trick as SpringIn (defer the flip past
+// the first paint so the transition has a "from" frame, and keep the setState
+// out of a synchronous effect body), just tuned snappier — 200ms — for chat.
+//
+// Each message in the list wraps in one of these, keyed by index. New messages
+// get a fresh key → mount → animate once. The streaming assistant reply keeps
+// the SAME key while its text grows, so it stays mounted and never re-animates
+// mid-stream — only the bubble's first appearance plays the entrance.
+function MessageIn({ children }: { children: ReactNode }) {
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  return (
+    <div
+      className={`transition-all duration-200 ease-out ${
+        shown ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
       }`}
     >
       {children}
