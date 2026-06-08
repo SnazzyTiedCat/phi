@@ -852,7 +852,7 @@ export default function LessonView({ chunks, source }: Props) {
           `relative` after `fixed`, so adding both would override the fixed pin
           and the bar would scroll away.) */}
       <div
-        className={`fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-8 rounded-2xl border border-white/8 bg-zinc-900/90 px-8 py-4 shadow-2xl shadow-black/50 backdrop-blur-xl transition-all ${
+        className={`fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-8 rounded-2xl border border-white/8 bg-zinc-900/90 px-8 py-4 shadow-2xl shadow-black/50 backdrop-blur-xl transition-all duration-200 hover:scale-105 ${
           isFlashcardsLoading || isQuizLoading
             ? "animate-pulse ring-2 ring-amber-400/60"
             : "ring-1 ring-white/5"
@@ -865,7 +865,7 @@ export default function LessonView({ chunks, source }: Props) {
           onClick={toggleFlashcards}
           aria-label="Toggle flashcards"
           aria-pressed={flashcardsOpen}
-          className="cursor-pointer"
+          className="cursor-pointer transition-transform active:scale-95"
         >
           <Squares2X2Icon
             className={`h-5 w-5 transition-colors ${
@@ -881,7 +881,7 @@ export default function LessonView({ chunks, source }: Props) {
           onClick={toggleQuiz}
           aria-label="Toggle quiz"
           aria-pressed={quizOpen}
-          className="cursor-pointer"
+          className="cursor-pointer transition-transform active:scale-95"
         >
           <AcademicCapIcon
             className={`h-5 w-5 transition-colors ${
@@ -898,7 +898,7 @@ export default function LessonView({ chunks, source }: Props) {
           onClick={isPlaying ? pauseAudio : playAudio}
           disabled={!supportsSpeech}
           aria-label={isPlaying ? "Pause read-aloud" : "Play read-aloud"}
-          className="cursor-pointer transition-opacity disabled:cursor-not-allowed disabled:opacity-30"
+          className="cursor-pointer transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
         >
           {isPlaying ? (
             <PauseIcon className="h-5 w-5 text-amber-400" />
@@ -913,7 +913,7 @@ export default function LessonView({ chunks, source }: Props) {
           onClick={() => setChatOpen((open) => !open)}
           aria-label="Toggle chat"
           aria-pressed={chatOpen}
-          className="cursor-pointer"
+          className="cursor-pointer transition-transform active:scale-95"
         >
           <ChatBubbleLeftIcon
             className={`h-5 w-5 transition-colors ${
