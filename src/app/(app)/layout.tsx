@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import BackButton from "./BackButton";
+import PageTransition from "./PageTransition";
 
 /**
  * Layout for the authenticated app: /dashboard, /settings, and anything else
@@ -74,8 +75,13 @@ export default async function AppLayout({
         </nav>
       </header>
 
-      {/* Page content. flex-1 lets a page grow to fill the viewport height. */}
-      <main className="flex-1">{children}</main>
+      {/* Page content. flex-1 lets a page grow to fill the viewport height.
+          PageTransition fades each route in — and, because it's keyed on the
+          pathname, replays that fade on every navigation (a persistent server
+          layout otherwise animates only once). */}
+      <main className="flex-1">
+        <PageTransition>{children}</PageTransition>
+      </main>
     </div>
   );
 }
