@@ -125,7 +125,7 @@ export default async function DashboardPage() {
             being squeezed when the greeting is long. */}
         <Link
           href="/upload"
-          className="inline-flex shrink-0 items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-300 hover:bg-[#e2bb68] hover:scale-[1.03] active:scale-[0.98]"
+          className="inline-flex shrink-0 items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
         >
           Upload material
         </Link>
@@ -148,7 +148,7 @@ export default async function DashboardPage() {
             <Link
               key={source}
               href={`/lesson?source=${encodeURIComponent(source)}`}
-              className="group flex cursor-pointer flex-col rounded-2xl border border-white/10 bg-surface/40 p-5 transition-all duration-200 hover:border-white/20 hover:bg-white/5 hover:-translate-y-0.5"
+              className="group glass-standard shadow-card flex cursor-pointer flex-col rounded-2xl p-5 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-2 hover:shadow-2xl"
             >
               {/* Gold φ icon. `aria-hidden` because it's decorative — the
                   filename below already names the card for screen readers. */}
@@ -195,7 +195,7 @@ export default async function DashboardPage() {
 
           <Link
             href="/upload"
-            className="mt-6 inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-300 hover:bg-[#e2bb68] hover:scale-[1.03] active:scale-[0.98]"
+            className="mt-6 inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
           >
             Upload material
           </Link>

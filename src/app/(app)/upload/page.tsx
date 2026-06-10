@@ -229,7 +229,7 @@ export default function UploadPage() {
           type="button"
           onClick={handleUpload}
           disabled={!file || isUploading}
-          className="mt-3 inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-300 hover:bg-[#e2bb68] hover:scale-[1.03] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+          className="mt-3 inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none"
         >
           {isUploading ? "Processing…" : "Upload and process"}
         </button>
@@ -304,14 +304,14 @@ export default function UploadPage() {
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
             href={`/lesson?source=${encodeURIComponent(successFileName ?? "")}`}
-            className="inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-300 hover:bg-[#e2bb68] hover:scale-[1.03] active:scale-[0.98]"
+            className="inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
           >
             Start learning
           </Link>
           <button
             type="button"
             onClick={resetForm}
-            className="inline-flex items-center rounded-full border border-white/10 bg-surface/40 px-6 py-3 text-sm font-medium text-text transition-all duration-300 hover:border-white/20 hover:scale-[1.03] active:scale-[0.98]"
+            className="inline-flex items-center rounded-full border border-white/10 bg-surface/40 px-6 py-3 text-sm font-medium text-text transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg active:scale-95"
           >
             Upload another
           </button>

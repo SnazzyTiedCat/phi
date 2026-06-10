@@ -659,8 +659,8 @@ export default function LessonView({ chunks, source }: Props) {
                   disabled={isFlashcardsLoading}
                   className="
                     flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-5 py-2.5
-                    text-sm font-medium text-background transition-colors hover:bg-[#e2bb68]
-                    disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent
+                    text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95
+                    disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none
                   "
                 >
                   {isFlashcardsLoading ? (
@@ -705,8 +705,8 @@ export default function LessonView({ chunks, source }: Props) {
                   disabled={isQuizLoading}
                   className="
                     flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-5 py-2.5
-                    text-sm font-medium text-background transition-colors hover:bg-[#e2bb68]
-                    disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent
+                    text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95
+                    disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none
                   "
                 >
                   {isQuizLoading ? (
@@ -736,8 +736,8 @@ export default function LessonView({ chunks, source }: Props) {
       {chatOpen && (
       <aside
         className="
-          flex flex-col border-t border-white/10 bg-surface
-          lg:h-[calc(100vh-4rem)] lg:w-1/3 lg:sticky lg:top-16 lg:border-l lg:border-t-0
+          flex flex-col border-t border-white/[0.055] bg-white/[0.025] backdrop-blur-xl
+          lg:h-[calc(100vh-4rem)] lg:w-1/3 lg:sticky lg:top-16 lg:border-l lg:border-l-white/[0.055] lg:border-t-0
         "
       >
         {/* Header */}
@@ -839,8 +839,8 @@ export default function LessonView({ chunks, source }: Props) {
               aria-label="Send message"
               className="
                 cursor-pointer shrink-0 rounded-xl bg-accent px-3.5 py-2.5 text-sm font-medium text-background
-                transition-colors hover:bg-[#e2bb68]
-                disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent
+                transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95
+                disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none
               "
             >
               Send
@@ -851,12 +851,13 @@ export default function LessonView({ chunks, source }: Props) {
       )}
 
       {/* ── Floating action bar ─────────────────────────────────────────────
-          An elevated rounded bubble pinned to the bottom-centre of the viewport.
+          An elevated glass pill pinned to the bottom-centre of the viewport.
           Four controls: toggle flashcards, toggle quiz, play/pause read-aloud,
           toggle chat. `fixed` lifts it out of flow so it floats over both
-          columns. The deep `shadow-2xl shadow-black/50` plus a hairline
-          `ring-white/5` lift it off the page so it reads as floating ~6px above
-          the content, not welded to the bottom edge. While flashcards or the
+          columns. The Spades glass surface (`glass-standard`) + layered
+          `shadow-card` plus a hairline `ring-white/5` lift it off the page so it
+          reads as floating above the content, not welded to the bottom edge,
+          and `rounded-full` makes it a true pill. While flashcards or the
           quiz are generating, the quiet white ring
           swaps for a pulsing amber one (ring-2 ring-amber-400/60 animate-pulse)
           so the whole bubble glows as a "working" cue; `transition-all` smooths
@@ -865,7 +866,7 @@ export default function LessonView({ chunks, source }: Props) {
           `relative` after `fixed`, so adding both would override the fixed pin
           and the bar would scroll away.) */}
       <div
-        className={`fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-8 rounded-2xl border border-white/8 bg-zinc-900/90 px-8 py-4 shadow-2xl shadow-black/50 backdrop-blur-xl transition-all duration-200 hover:scale-105 ${
+        className={`glass-standard shadow-card fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-8 rounded-full px-8 py-4 transition-all duration-200 hover:scale-105 ${
           isFlashcardsLoading || isQuizLoading
             ? "animate-pulse ring-2 ring-amber-400/60"
             : "ring-1 ring-white/5"
@@ -1179,7 +1180,7 @@ function QuizRunner({ questions }: { questions: QuizQuestion[] }) {
         <button
           type="button"
           onClick={restart}
-          className="mt-2 cursor-pointer rounded-xl border border-white/10 bg-surface px-5 py-2.5 text-sm font-medium text-text transition-colors hover:border-white/25"
+          className="mt-2 cursor-pointer rounded-xl border border-white/10 bg-surface px-5 py-2.5 text-sm font-medium text-text transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-white/25 hover:shadow-lg active:scale-95"
         >
           Try again
         </button>
@@ -1220,7 +1221,7 @@ function QuizRunner({ questions }: { questions: QuizQuestion[] }) {
           <button
             type="button"
             onClick={next}
-            className="cursor-pointer rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#e2bb68]"
+            className="cursor-pointer rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
           >
             {isLast ? "See results" : "Next question"}
           </button>

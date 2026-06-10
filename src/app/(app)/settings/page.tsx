@@ -134,7 +134,7 @@ export default function SettingsPage() {
       {/* Same card styling as the auth form for a consistent product feel. */}
       <form
         onSubmit={handleSave}
-        className="mt-8 space-y-6 rounded-2xl border border-white/[0.06] bg-surface/80 p-8 backdrop-blur-sm"
+        className="glass-standard shadow-card mt-8 space-y-6 rounded-2xl p-8"
       >
         <div className="space-y-2">
           <label
@@ -164,7 +164,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-4">
           <button
             type="submit"
-            className="inline-flex items-center rounded-lg bg-accent px-5 py-3 text-sm font-medium text-background transition-all duration-300 hover:bg-[#e2bb68] active:scale-[0.99]"
+            className="inline-flex items-center rounded-lg bg-accent px-5 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
           >
             Save keys
           </button>
@@ -188,7 +188,7 @@ export default function SettingsPage() {
           Only rendered when the user's email is unconfirmed. Same card styling
           as the keys form above so the page reads as one cohesive surface. */}
       {needsConfirmation && (
-        <section className="mt-8 rounded-2xl border border-white/[0.06] bg-surface/80 p-8 backdrop-blur-sm">
+        <section className="glass-standard shadow-card mt-8 rounded-2xl p-8">
           <h2 className="text-base font-medium text-text">Account</h2>
           <p className="mt-2 text-sm text-muted">
             {accountEmail ? (
@@ -206,7 +206,7 @@ export default function SettingsPage() {
               type="button"
               onClick={handleResend}
               disabled={isResending}
-              className="inline-flex items-center rounded-lg bg-accent px-5 py-3 text-sm font-medium text-background transition-all duration-300 hover:bg-[#e2bb68] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent"
+              className="inline-flex items-center rounded-lg bg-accent px-5 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none"
             >
               {isResending ? "Sending…" : "Resend confirmation email"}
             </button>
