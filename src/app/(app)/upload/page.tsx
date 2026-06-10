@@ -4,7 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Status = "idle" | "uploading" | "done" | "error";
-type UploadResponse = { count: number };
+
+// One section in the roadmap /api/upload returns. Mirrors the `sources.sections`
+// jsonb shape. `sections` is empty when mapping was skipped or failed (no key,
+// Claude error) — the success panel falls back to a single "Start learning".
+type Section = {
+  index: number;
+  title: string;
+  description: string;
+  start_chunk: number;
+  end_chunk: number;
+};
+type UploadResponse = { count: number; sections?: Section[] };
 
 // The narrated steps shown while an upload is in flight. These are reassurance,
 // not telemetry — the real /api/upload call runs in parallel and we have no
@@ -13,6 +24,7 @@ type UploadResponse = { count: number };
 const UPLOAD_STEPS = [
   "Reading your file…",
   "Breaking into chunks…",
+  "Mapping into sections…",
   "Saving to your library…",
 ];
 
@@ -24,6 +36,9 @@ export default function UploadPage() {
   // Captured at the moment of success so the success panel can show it even
   // after `file` is cleared by a reset.
   const [successFileName, setSuccessFileName] = useState<string | null>(null);
+  // The section roadmap returned by /api/upload. Empty array = the document
+  // wasn't mapped (no key / mapping failed); the success panel handles both.
+  const [successSections, setSuccessSections] = useState<Section[]>([]);
 
   // Which narrated step we're on: 0 = none, 1/2/3 = the steps in UPLOAD_STEPS.
   // A step is "shown" once we reach it, "active" while it's the current one, and
@@ -67,6 +82,7 @@ export default function UploadPage() {
     setStep(0);
     setFile(null);
     setSuccessFileName(null);
+    setSuccessSections([]);
     setStatus("idle");
     setErrorMessage("");
     setIsDragging(false);
@@ -100,18 +116,26 @@ export default function UploadPage() {
     setStatus("uploading");
     setErrorMessage("");
 
-    // Kick off the narrated steps: step 1 immediately, step 2 at 1s, step 3 at
-    // 2s. Clear first so a quick retry doesn't stack two sets of timers.
+    // Kick off the narrated steps: step 1 immediately, then the rest on timers.
+    // "Mapping into sections…" (step 3) is the long pole — it's the Claude call
+    // — so we let it land at 2s and sit there through the wait. Clear first so a
+    // quick retry doesn't stack two sets of timers.
     clearStepTimers();
     setStep(1);
     stepTimers.current = [
-      setTimeout(() => setStep(2), 1000),
-      setTimeout(() => setStep(3), 2000),
+      setTimeout(() => setStep(2), 800),
+      setTimeout(() => setStep(3), 1600),
+      setTimeout(() => setStep(4), 3200),
     ];
 
     try {
       const body = new FormData();
       body.append("file", file);
+      // Send the Anthropic key alongside the file so /api/upload can map the
+      // document into sections. It's optional: with no key the upload still
+      // succeeds, just without a section roadmap (the route is best-effort).
+      const apiKey = localStorage.getItem("phi_anthropic_key");
+      if (apiKey) body.append("apiKey", apiKey);
       const res = await fetch("/api/upload", { method: "POST", body });
       const data: UploadResponse | { error?: string } = await res.json();
 
@@ -127,8 +151,13 @@ export default function UploadPage() {
         return;
       }
 
-      // Capture the filename before clearing state — the success panel needs it.
+      // Capture the filename + section roadmap before clearing state — the
+      // success panel needs both. `sections` may be absent/empty (mapping
+      // skipped or failed); the panel handles that with a single CTA.
       setSuccessFileName(file.name);
+      setSuccessSections(
+        "sections" in data && Array.isArray(data.sections) ? data.sections : [],
+      );
       setStatus("done");
     } catch {
       clearStepTimers();
@@ -290,32 +319,93 @@ export default function UploadPage() {
           position — the opposite direction from the upload panel leaving.     */}
       <div
         aria-live="polite"
-        className={`absolute inset-0 flex flex-col justify-center px-6 transition-all duration-500 ease-out ${
+        className={`absolute inset-0 flex flex-col justify-center overflow-y-auto px-6 py-8 transition-all duration-500 ease-out ${
           isDone
             ? "translate-y-0 opacity-100"
             : "pointer-events-none translate-y-3 opacity-0"
         }`}
       >
-        <p className="text-sm text-muted">Your material is ready.</p>
+        <p className="text-sm text-muted">
+          {successSections.length > 0
+            ? `Your material has been mapped into ${successSections.length} section${
+                successSections.length === 1 ? "" : "s"
+              }.`
+            : "Your material is ready."}
+        </p>
         <p className="mt-2 truncate text-2xl font-semibold text-accent">
           {successFileName}
         </p>
 
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            href={`/lesson?source=${encodeURIComponent(successFileName ?? "")}`}
-            className="inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
-          >
-            Start learning
-          </Link>
-          <button
-            type="button"
-            onClick={resetForm}
-            className="inline-flex items-center rounded-full border border-white/10 bg-surface/40 px-6 py-3 text-sm font-medium text-text transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg active:scale-95"
-          >
-            Upload another
-          </button>
-        </div>
+        {successSections.length > 0 ? (
+          /* ── Roadmap ────────────────────────────────────────────────────
+             One row per section: its title + a Start button that deep-links
+             into that section's lesson. The student can dive straight into any
+             section, or head to the dashboard to see the whole roadmap. Each
+             row is a list item so it reads as an ordered study path. */
+          <>
+            <ol className="mt-6 space-y-2">
+              {successSections.map((section) => (
+                <li
+                  key={section.index}
+                  className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-surface/40 px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-text">
+                      {section.index + 1}. {section.title}
+                    </p>
+                    {section.description && (
+                      <p className="mt-0.5 truncate text-xs text-muted">
+                        {section.description}
+                      </p>
+                    )}
+                  </div>
+                  <Link
+                    href={`/lesson?source=${encodeURIComponent(
+                      successFileName ?? "",
+                    )}&section=${section.index}`}
+                    className="inline-flex shrink-0 items-center rounded-full border border-white/10 bg-surface px-4 py-2 text-xs font-medium text-text transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-accent/50 hover:text-accent active:scale-95"
+                  >
+                    Start
+                  </Link>
+                </li>
+              ))}
+            </ol>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
+              >
+                Go to dashboard
+              </Link>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="inline-flex items-center rounded-full border border-white/10 bg-surface/40 px-6 py-3 text-sm font-medium text-text transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg active:scale-95"
+              >
+                Upload another
+              </button>
+            </div>
+          </>
+        ) : (
+          /* Fallback: mapping was skipped or failed. Keep the original single
+             "Start learning" (whole document) + "Upload another" pair. */
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href={`/lesson?source=${encodeURIComponent(successFileName ?? "")}`}
+              className="inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
+            >
+              Start learning
+            </Link>
+            <button
+              type="button"
+              onClick={resetForm}
+              className="inline-flex items-center rounded-full border border-white/10 bg-surface/40 px-6 py-3 text-sm font-medium text-text transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg active:scale-95"
+            >
+              Upload another
+            </button>
+          </div>
+        )}
       </div>
 
     </div>

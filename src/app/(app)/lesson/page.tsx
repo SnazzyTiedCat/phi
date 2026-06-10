@@ -27,13 +27,24 @@ import LessonView from "@/components/LessonView";
  * object and we `await props.searchParams`.
  */
 export default async function LessonPage(props: {
-  searchParams: Promise<{ source?: string }>;
+  searchParams: Promise<{ source?: string; section?: string }>;
 }) {
-  // Read ?source=... from the URL. The dashboard and upload pages link here as
-  // `/lesson?source=<encoded filename>`, so `source` is the source_name of the
-  // file the student wants to study. Next decodes the URL-encoding for us, so
+  // Read ?source=... (and the optional ?section=) from the URL. The dashboard
+  // and upload pages link here as `/lesson?source=<encoded filename>` and, for a
+  // single section, `&section=<index>`. Next decodes the URL-encoding for us, so
   // `source` is the plain filename here.
-  const { source } = await props.searchParams;
+  const { source, section } = await props.searchParams;
+
+  // Parse ?section into a non-negative integer, or `undefined` if it's missing
+  // or malformed. We're lenient on purpose: a bad section param falls through to
+  // the whole-document lesson rather than erroring.
+  const requestedSection =
+    section !== undefined &&
+    section !== "" &&
+    Number.isInteger(Number(section)) &&
+    Number(section) >= 0
+      ? Number(section)
+      : undefined;
 
   // No source in the URL = nothing to teach. Send them back to pick a subject.
   // `redirect()` throws internally to stop rendering, so nothing after it runs.
@@ -55,21 +66,57 @@ export default async function LessonPage(props: {
     redirect("/dashboard");
   }
 
-  // Fetch every chunk for THIS user and THIS source. We only need the `content`
+  // Fetch the chunks for THIS user and THIS source. We only need the `content`
   // column — that's the text Claude teaches from. We filter by user_id even
   // though RLS already restricts rows to the current user: explicit intent +
-  // defense-in-depth, same as the dashboard query.
-  const { data: chunkRows } = await supabase
+  // defense-in-depth, same as the dashboard query. When a section was requested
+  // we add `.eq("section_index", n)` so Claude only sees that section's chunks.
+  let query = supabase
     .from("chunks")
     .select("content")
     .eq("user_id", user.id)
     .eq("source_name", source);
+  if (requestedSection !== undefined) {
+    query = query.eq("section_index", requestedSection);
+  }
+  let { data: chunkRows } = await query;
 
-  // No chunks = the source doesn't exist for this user (bad/stale URL, or a
-  // file that was never really uploaded). Don't render an empty lesson shell —
-  // send them back to the dashboard.
+  // `effectiveSection` is the section we'll actually teach. It can differ from
+  // `requestedSection` when the section filter matched nothing — e.g. a stale
+  // link, or an older upload whose chunks all default to section_index 0. In
+  // that case we fall back to the whole document rather than dead-ending the
+  // student at the dashboard.
+  let effectiveSection = requestedSection;
+  if (requestedSection !== undefined && (!chunkRows || chunkRows.length === 0)) {
+    const { data: allRows } = await supabase
+      .from("chunks")
+      .select("content")
+      .eq("user_id", user.id)
+      .eq("source_name", source);
+    chunkRows = allRows;
+    effectiveSection = undefined;
+  }
+
+  // No chunks even unfiltered = the source doesn't exist for this user (bad/
+  // stale URL, or a file that was never really uploaded). Don't render an empty
+  // lesson shell — send them back to the dashboard.
   if (!chunkRows || chunkRows.length === 0) {
     redirect("/dashboard");
+  }
+
+  // When teaching a section, look up its title so the tutor prompt can name it.
+  // Read-only and best-effort: a missing roadmap just means no title is passed
+  // (the lesson still generates, just without the "Section N: …" framing).
+  let sectionTitle: string | undefined;
+  if (effectiveSection !== undefined) {
+    const { data: sourceRow } = await supabase
+      .from("sources")
+      .select("sections")
+      .eq("user_id", user.id)
+      .eq("source_name", source)
+      .maybeSingle();
+    const sections = (sourceRow?.sections ?? []) as { index: number; title: string }[];
+    sectionTitle = sections.find((s) => s.index === effectiveSection)?.title;
   }
 
   // Flatten the rows ({ content }[]) into a plain string[] — the shape both the
@@ -79,5 +126,12 @@ export default async function LessonPage(props: {
 
   // Hand off to the interactive client component. From here the browser takes
   // over: it reads the API key from localStorage and requests the lesson.
-  return <LessonView chunks={chunks} source={source} />;
+  return (
+    <LessonView
+      chunks={chunks}
+      source={source}
+      sectionIndex={effectiveSection}
+      sectionTitle={sectionTitle}
+    />
+  );
 }

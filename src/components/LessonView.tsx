@@ -35,6 +35,12 @@ import {
 type Props = {
   chunks: string[];
   source: string;
+  // Optional section context, set when the student opened ONE section of a
+  // mapped document. The server page already filtered `chunks` to this section;
+  // these are forwarded to /api/lesson so it keys the cache per-section and
+  // focuses the tutor prompt. Undefined = whole-document lesson.
+  sectionIndex?: number;
+  sectionTitle?: string;
 };
 
 type Status = "loading" | "no-key" | "error" | "done";
@@ -53,7 +59,12 @@ type Flashcard = { front: string; back: string };
 // `options` of the right answer.
 type QuizQuestion = { question: string; options: string[]; correct: number };
 
-export default function LessonView({ chunks, source }: Props) {
+export default function LessonView({
+  chunks,
+  source,
+  sectionIndex,
+  sectionTitle,
+}: Props) {
   // Start in "loading": the moment the component mounts we'll either kick off
   // the request or immediately flip to "no-key". Starting here avoids a flash
   // of empty content before the effect runs.
@@ -115,7 +126,7 @@ export default function LessonView({ chunks, source }: Props) {
         const res = await fetch("/api/lesson", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chunks, source, apiKey }),
+          body: JSON.stringify({ chunks, source, apiKey, sectionIndex, sectionTitle }),
         });
 
         const data: { lesson?: string; error?: string } = await res.json();

@@ -33,6 +33,12 @@ type LessonRequest = {
   chunks: string[];
   source: string;
   apiKey: string;
+  // Optional section context. Present when the student opened ONE section of a
+  // mapped document (the lesson page already filtered `chunks` to that section).
+  // We use them only for the cache key and to focus the system prompt — the
+  // route never re-queries chunks. Absent = whole-document lesson (legacy path).
+  sectionIndex?: number;
+  sectionTitle?: string;
 };
 
 // The exact tutor system prompt. Kept as a module-level constant (not inlined)
@@ -69,7 +75,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const { chunks, source, apiKey } = body;
+  const { chunks, source, apiKey, sectionIndex, sectionTitle } = body;
+
+  // A section lesson is one where a valid, non-negative section index came in.
+  // We treat anything else (undefined, non-integer, negative) as a whole-doc
+  // lesson rather than erroring — the param is an optimization, not a contract.
+  const isSection =
+    typeof sectionIndex === "number" &&
+    Number.isInteger(sectionIndex) &&
+    sectionIndex >= 0;
 
   // 2) Validate. All three fields are required. We check them explicitly so the
   //    error message tells the caller exactly what's missing instead of letting
@@ -117,19 +131,29 @@ export async function POST(request: Request) {
   //    and fixes the mismatch when the string is still encoded.
   const normalisedSource = decodeURIComponent(source.replace(/\+/g, " "));
 
+  // 4b) Derive the cache key. Per-section lessons must NOT collide with the
+  //     whole-document lesson (or with each other), so a section lesson is keyed
+  //     by `<source>_section_<index>`. We reuse the existing `lessons` table and
+  //     its unique(user_id, source_name) constraint — the section just lives in
+  //     the source_name string. The dashboard reconstructs the exact same key to
+  //     detect which sections are completed.
+  const cacheSource = isSection
+    ? `${normalisedSource}_section_${sectionIndex}`
+    : normalisedSource;
+
   // 4a) Cache check. If we've already generated a lesson for this user + source,
   //     return it immediately — no Anthropic call, no token spend.
   //     We use `.maybeSingle()` rather than `.single()`: both return data=null
   //     when there's no row, but `.single()` also returns an error object on a
   //     miss which can obscure real DB errors. `.maybeSingle()` only errors on
   //     genuine problems (connection failure, RLS rejection, etc.).
-  console.log("[lesson] cache check — user:", user.id, "source:", normalisedSource);
+  console.log("[lesson] cache check — user:", user.id, "source:", cacheSource);
 
   const { data: cached, error: cacheError } = await supabase
     .from("lessons")
     .select("content")
     .eq("user_id", user.id)
-    .eq("source_name", normalisedSource)
+    .eq("source_name", cacheSource)
     .maybeSingle();
 
   if (cacheError) {
@@ -149,6 +173,17 @@ export async function POST(request: Request) {
   const material = chunks.join("\n\n");
   const userMessage = `Teach me this material:\n\n${material}`;
 
+  // For a section lesson, focus the tutor on just this section. We append the
+  // context to the base prompt rather than replacing it, so the teaching voice
+  // and structure rules still apply. `sectionIndex + 1` is the human-facing
+  // number (the index is 0-based); the title is whatever Claude named it at
+  // upload. When there's no section, the base prompt is used unchanged.
+  const systemPrompt = isSection
+    ? `${SYSTEM_PROMPT}\n\nYou are teaching Section ${sectionIndex! + 1}${
+        sectionTitle ? `: ${sectionTitle}` : ""
+      }. Focus exclusively on this section. The material below is only this section's content — teach it as a self-contained lesson, not the whole document.`
+    : SYSTEM_PROMPT;
+
   // 6) Create an Anthropic client with the USER'S key (not a server env var).
   //    Each request makes its own client because each request carries a
   //    different user's key — there's no shared, long-lived client to reuse.
@@ -161,7 +196,7 @@ export async function POST(request: Request) {
     const message = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
     });
 
@@ -188,9 +223,10 @@ export async function POST(request: Request) {
     // `.upsert` with `onConflict` handles the unique(user_id, source_name)
     // constraint — if two tabs race to generate the same lesson, the second
     // write just overwrites with an identical value.
-    // We store normalisedSource (decoded) so it always matches the lookup above.
+    // We store cacheSource (decoded, plus the _section_N suffix when scoped) so
+    // it always matches the cache lookup above.
     const { error: upsertError } = await supabase.from("lessons").upsert(
-      { user_id: user.id, source_name: normalisedSource, content: lesson },
+      { user_id: user.id, source_name: cacheSource, content: lesson },
       { onConflict: "user_id,source_name" },
     );
 
@@ -199,7 +235,7 @@ export async function POST(request: Request) {
       // it just won't be cached for next time.
       console.error("[lesson] upsert error (lesson will not be cached):", upsertError);
     } else {
-      console.log("[lesson] lesson cached successfully for source:", normalisedSource);
+      console.log("[lesson] lesson cached successfully for source:", cacheSource);
     }
 
     return NextResponse.json({ lesson });
