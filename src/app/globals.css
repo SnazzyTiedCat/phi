@@ -8,14 +8,38 @@
   --color-text: #f0f0f0;
   --color-muted: #555555;
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Space Mono is the single typeface (Spades DESIGN.md §2.2) — one face for
+     the whole product, so sans and mono both resolve to it. */
+  --font-sans: var(--font-space-mono);
+  --font-mono: var(--font-space-mono);
+
+  /* The Spades 14-step grayscale (DESIGN.md §2.1). Contrast carries all
+     hierarchy — these generate text-c-400, bg-c-900, border-c-800, etc. */
+  --color-c-black: #000000;
+  --color-c-950: #080808;
+  --color-c-900: #111111;
+  --color-c-850: #1a1a1a;
+  --color-c-800: #222222;
+  --color-c-700: #333333;
+  --color-c-600: #555555;
+  --color-c-500: #777777;
+  --color-c-400: #999999;
+  --color-c-300: #bbbbbb;
+  --color-c-200: #cccccc;
+  --color-c-100: #e5e5e5;
+  --color-c-50: #f2f2f2;
 
   --animate-fade-in-up: fade-in-up 1s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-float: float 8s ease-in-out infinite;
   --animate-glow-breathe: glow-breathe 6s ease-in-out infinite;
   --animate-shimmer-text: shimmer-text 4s linear infinite;
   --animate-page-in: page-in 0.3s ease-out both;
+
+  /* Atmospheric orbs (DESIGN.md §2.7). The top-right orb drifts very slowly;
+     the bottom-left is static. Both live in the root layout. */
+  --animate-orb-drift: orb-drift 28s ease-in-out infinite alternate;
+  /* Hero scroll indicator — a slow breathing pulse. */
+  --animate-breathe: breathe 3s ease-in-out infinite;
 }
 
 /* The per-page entrance. Tailwind v4 turns the `--animate-page-in` theme var
@@ -74,9 +98,37 @@
   }
 }
 
+/* Top-right orb's slow drift. `alternate` eases out to the offset and back. */
+@keyframes orb-drift {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(-60px, 40px);
+  }
+}
+
+/* Scroll-indicator chevron: opacity + a small vertical nudge, paired so it
+   never animates one property alone (DESIGN.md §3.6). */
+@keyframes breathe {
+  0%, 100% {
+    opacity: 0.2;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.55;
+    transform: translateY(4px);
+  }
+}
+
 :root {
   --background: #080808;
   --foreground: #f0f0f0;
+}
+
+html {
+  /* Smooth in-page anchor scrolling for the hero's "See how it works" jump. */
+  scroll-behavior: smooth;
 }
 
 html,
@@ -87,7 +139,64 @@ body {
 }
 
 body {
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-space-mono), ui-monospace, "SFMono-Regular", monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Glass surfaces (DESIGN.md §2.5) ──────────────────────────────────────
+   Reserved for surfaces that float above content. Two levels: Subtle (dimmed,
+   for the de-emphasised comparison card) and Standard (cards, panels). Blur
+   drops to 12px on mobile for performance, and falls back to an opaque panel
+   where backdrop-filter isn't supported. */
+.glass-standard {
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+/* Deep, layered card shadow (--sh-lg). */
+.shadow-card {
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 768px) {
+  .glass-standard,
+  .glass-subtle {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-standard,
+  .glass-subtle {
+    background: #111111;
+  }
+}
+
+/* Visible focus ring on keyboard navigation (DESIGN.md §15). */
+:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 3px;
+}
+
+/* Respect reduced-motion: neutralise the cinematic timing everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
