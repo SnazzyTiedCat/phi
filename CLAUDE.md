@@ -10,7 +10,7 @@ Phi is an AI-powered academic learning platform for students. Not a research ass
 
 **Core philosophy:** AI augments human intelligence. It does not replace thinking. Phi makes students better learners, not dependent ones.
 
-**The one-line pitch:** Upload your notes. Phi teaches you.
+**The one-line pitch:** AI that actually teaches you.
 
 -----
 
@@ -64,7 +64,7 @@ Ship exactly this. Nothing more.
 - [x] ✅ Lesson view — AI teaches the content, ElevenLabs reads aloud
 - [x] ✅ Chat sidebar — pause, explain simply, skip ahead
 - [x] ✅ Flashcards generated from lesson content
-- [ ] 🚧 Basic quiz (in progress — not yet built)
+- [x] ✅ Basic quiz
 
 **Exit condition:** A student can upload their data science textbook, get structured lessons, read along with audio, ask the chat questions mid-lesson, and get flashcards at the end.
 
@@ -93,6 +93,8 @@ What has actually been built and is running as of June 2026.
 | `POST /api/chat` | Done | RAG from chunks table; streamed reply via `text/plain`; full conversation history |
 | `GET /api/flashcards` | Done | Cache-only read; no Claude call |
 | `POST /api/flashcards` | Done | Claude `claude-sonnet-4-6`; cached to `flashcards` table |
+| `GET /api/quiz` | Done | Cache-only read; no Claude call |
+| `POST /api/quiz` | Done | Multiple-choice quiz; mirrors flashcards; cached to `quizzes` table |
 
 **Features in the lesson view**
 
@@ -103,7 +105,6 @@ What has actually been built and is running as of June 2026.
 
 **Not yet built**
 
-- Quiz (listed in MVP scope; no route or UI exists yet)
 - Real vector embeddings (zero-vector placeholders stored; pgvector similarity search not wired up)
 
 -----
@@ -122,7 +123,6 @@ Everything below goes here. Not in the codebase. Not in a branch. Here.
 - ElevenLabs TTS integration (human-quality voice; replaces Web Speech API)
 - OpenAI TTS as an ElevenLabs alternative
 - Chat history persistence (currently in-memory only; lost on page reload)
-- Quiz generation
 
 -----
 
