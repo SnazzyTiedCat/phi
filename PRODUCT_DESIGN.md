@@ -105,6 +105,15 @@ In SwiftUI, prefer `.matchedGeometryEffect` for shared-element transitions betwe
 --z-toast:      60    /* Toast notifications */
 ```
 
+### 2.5 Product Accent Colors
+The Spades Company makreting site (thespades.co) uses no accent color by design. Products are different -- each product ships with exactly one accent color that defines its visual identity.
+# Rules
+- One accent per product. Never two.
+- The accent is used for: primary CTAs, active states, key highlights, the product's mark or logo
+- Never used for: body text, backgrounds, borders, secondary UI
+- The accentm ust pass WCAG AA contrast against `--c 950` when used for text
+Defined once in the product's spec and never changed without a version update
+
 ---
 
 ## 3. iOS Design Principles
@@ -225,11 +234,11 @@ Every Spades Company product must feel like it belongs to the same family. This 
 
 Regardless of what the app does, the following are constant across every product:
 
-- Space Mono throughout
+- Space Mono as default throughout
 - `--c-950` background
 - Slow cinematic animation (same spring values)
 - ♠ mark as the app icon primary element
-- Suits as the subscription surface (RevenueCat)
+- Suits as the subscription surface
 - Same onboarding structure (§7)
 - Same paywall design (§8)
 - Same processing state patterns (§9)
@@ -246,11 +255,11 @@ Products may differ on:
 ### 5.3 What Makes a New App Feel "Spades"
 
 A user encountering an unfamiliar Spades Company app should recognize the brand within 3 seconds — not from a label, but from the feel:
-- The font is Space Mono
-- The background is near-black
+- The font is Space Mono (by default unless changed)
+- The background is near-black (by default unless light mode is supported and enabled)
 - Everything moves slowly and settles with spring physics
 - The UI recedes — it never competes with the task
-- The loading screen involves a super simple centered view of a ♠ icon with a progress bar filling in below it that takes up minimal horizontal space.
+- Startup loading animation that features a ♠ icon and a horizontally-minimal-sized progress bar that lasts a minimum amount of 1 second (by default unless changed)
 
 ---
 
