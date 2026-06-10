@@ -39,7 +39,33 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-text">
+    <div className="relative flex min-h-screen flex-col bg-background text-text">
+      {/* Atmospheric orbs (Spades DESIGN.md §2.7) — a gold orb drifting top-right
+          and a faint white one static bottom-left. Fixed and behind the content
+          (z-0); they paint above the layout's solid background, so the root
+          layout's marketing orbs stay occluded here (no doubling) while these
+          give the authenticated app its own warm depth. pointer-events-none and
+          aria-hidden — purely decorative. The header and <main> sit at z-10. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+      >
+        <div
+          className="animate-orb-drift absolute -right-[10%] -top-[20%] h-[60vw] w-[60vw] rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 65%)",
+          }}
+        />
+        <div
+          className="absolute -bottom-[20%] -left-[10%] h-[50vw] w-[50vw] rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(255,255,255,0.007) 0%, transparent 65%)",
+          }}
+        />
+      </div>
+
       {/* Top navigation — minimal, restrained, matches the Arc/Dia energy from
           the rest of the app. Sticky so it stays put as content scrolls. The
           subtle bottom border + backdrop-blur keeps it visually separate from
@@ -75,11 +101,12 @@ export default async function AppLayout({
         </nav>
       </header>
 
-      {/* Page content. flex-1 lets a page grow to fill the viewport height.
-          PageTransition fades each route in — and, because it's keyed on the
-          pathname, replays that fade on every navigation (a persistent server
-          layout otherwise animates only once). */}
-      <main className="flex-1">
+      {/* Page content. flex-1 lets a page grow to fill the viewport height;
+          relative z-10 lifts it above the atmospheric orbs. PageTransition fades
+          each route in — and, because it's keyed on the pathname, replays that
+          fade on every navigation (a persistent server layout otherwise animates
+          only once). */}
+      <main className="relative z-10 flex-1">
         <PageTransition>{children}</PageTransition>
       </main>
     </div>

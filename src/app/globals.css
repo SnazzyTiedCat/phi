@@ -33,7 +33,9 @@
   --animate-float: float 8s ease-in-out infinite;
   --animate-glow-breathe: glow-breathe 6s ease-in-out infinite;
   --animate-shimmer-text: shimmer-text 4s linear infinite;
-  --animate-page-in: page-in 0.3s ease-out both;
+  /* Page-level entrance (PageTransition): fade + a small rise, on the expo
+     curve over 700ms — the Spades section-reveal tempo. */
+  --animate-page-in: page-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 
   /* Atmospheric orbs (DESIGN.md §2.7). The top-right orb drifts very slowly;
      the bottom-left is static. Both live in the root layout. */
@@ -49,9 +51,11 @@
 @keyframes page-in {
   from {
     opacity: 0;
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -104,7 +108,7 @@
     transform: translate(0, 0);
   }
   to {
-    transform: translate(-60px, 40px);
+    transform: translate(30px, -20px);
   }
 }
 
@@ -131,6 +135,15 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Scroll-snapping is scoped to the marketing page only: the document scroller
+   snaps to section starts WHEN a `.snap-page` element is present (the landing
+   <main>). `:has()` keeps it off every authenticated route — those scroll
+   normally — without making <main> an inner scroll container (which would break
+   the viewport-rooted IntersectionObserver reveals). */
+html:has(.snap-page) {
+  scroll-snap-type: y mandatory;
+}
+
 html,
 body {
   height: 100%;
@@ -139,6 +152,7 @@ body {
 }
 
 body {
+  background-color: #080808;
   font-family: var(--font-space-mono), ui-monospace, "SFMono-Regular", monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
