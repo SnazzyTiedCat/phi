@@ -17,9 +17,11 @@ import Reveal from "@/components/Reveal";
  * departure from the doc's "no accent, ever" rule: Phi keeps its gold (the φ
  * mark and a few key highlights), used with restraint per the brief.
  *
- * A Server Component — almost everything here is static markup. The only client
- * code is <Reveal>, a small IntersectionObserver wrapper that fades each block
- * in as it scrolls into view.
+ * Single-scroll, six full-viewport sections that snap to their start (the snap
+ * is scoped to this page via `html:has(.snap-page)` in globals, so the rest of
+ * the app scrolls normally). A glass <SectionBleed> fades each section into the
+ * next. The only client code is <Reveal>, an IntersectionObserver wrapper that
+ * fades each block in as it scrolls into view.
  */
 
 // ── Shared class fragments ──────────────────────────────────────────────────
@@ -29,6 +31,9 @@ const SECTION_LABEL =
   "text-[10px] font-bold uppercase tracking-[0.2em] text-c-500";
 const H1 =
   "text-[clamp(28px,5vw,36px)] font-bold leading-[1.1] tracking-[-0.03em] text-white";
+// Each section fills the viewport, centres its content, and snaps to its start.
+const SECTION =
+  "relative flex min-h-screen snap-start flex-col justify-center px-6 py-24";
 const BTN_PRIMARY =
   "inline-flex items-center justify-center rounded-full bg-white px-7 py-3.5 text-[11px] font-bold uppercase tracking-[0.1em] text-black transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-c-100 hover:-translate-y-0.5 hover:shadow-[0_2px_10px_rgba(0,0,0,0.55)]";
 const BTN_SECONDARY =
@@ -71,13 +76,13 @@ const PHI_ROWS = [
 
 export default function Home() {
   return (
-    <main className="relative">
+    <main className="snap-page relative">
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 1 — Hero
           Full viewport, centered. The φ mark and each line stagger in on the
           slow 900ms hero tempo.
       ════════════════════════════════════════════════════════════════════ */}
-      <section className="relative flex min-h-svh flex-col items-center justify-center px-6 text-center">
+      <section className="relative flex min-h-screen snap-start flex-col items-center justify-center px-6 text-center">
         <Reveal hero from="up">
           <span
             aria-hidden="true"
@@ -116,14 +121,16 @@ export default function Home() {
         </Reveal>
 
         {/* Scroll indicator — a slow breathing chevron that jumps to the
-            comparison. */}
+            comparison. Sits above the bleed (z-10). */}
         <a
           href="#compare"
           aria-label="Scroll to the comparison"
-          className="absolute bottom-8 left-1/2 -translate-x-1/2"
+          className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2"
         >
           <ChevronDownIcon className="animate-breathe h-6 w-6 text-c-500" />
         </a>
+
+        <SectionBleed />
       </section>
 
       {/* ════════════════════════════════════════════════════════════════════
@@ -131,211 +138,224 @@ export default function Home() {
           Two glass cards. Research tools (dimmed, ×) slide in from the left;
           Phi (gold-edged, ✓) from the right.
       ════════════════════════════════════════════════════════════════════ */}
-      <section
-        id="compare"
-        className="relative mx-auto max-w-5xl scroll-mt-8 px-6 py-28"
-      >
-        <Reveal>
-          <p className={SECTION_LABEL}>The Difference</p>
-          <h2 className={`${H1} mt-4 max-w-2xl`}>
-            NotebookLM answers questions. Phi teaches.
-          </h2>
-        </Reveal>
-
-        <div className="mt-14 grid gap-6 md:grid-cols-2">
-          {/* Left — research tools, dimmed glass */}
-          <Reveal from="left">
-            <div className="glass-subtle shadow-card h-full rounded-[24px] p-8 opacity-80">
-              <p className={SECTION_LABEL}>Research Tools</p>
-              <p className="mt-2 text-[12px] text-c-600">
-                NotebookLM, ChatGPT, Perplexity
-              </p>
-              <ul className="mt-7 space-y-4">
-                {RESEARCH_ROWS.map((row) => (
-                  <li key={row} className="flex items-start gap-3">
-                    <span
-                      aria-hidden="true"
-                      className="mt-px select-none text-c-600"
-                    >
-                      ×
-                    </span>
-                    <span className="text-[14px] leading-[1.5] text-c-500">
-                      {row}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+      <section id="compare" className={SECTION}>
+        <div className="mx-auto w-full max-w-5xl">
+          <Reveal>
+            <p className={SECTION_LABEL}>The Difference</p>
+            <h2 className={`${H1} mt-4 max-w-2xl`}>
+              NotebookLM answers questions. Phi teaches.
+            </h2>
           </Reveal>
 
-          {/* Right — Phi, standard glass, gold left edge, slightly elevated */}
-          <Reveal from="right" delay={120}>
-            <div
-              className="glass-standard shadow-card h-full rounded-[24px] p-8 md:-translate-y-2"
-              style={{ borderLeft: "2px solid var(--color-accent)" }}
-            >
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">
-                Phi
-              </p>
-              <p className="mt-2 text-[12px] text-c-500">
-                Your tutor, built from your material
-              </p>
-              <ul className="mt-7 space-y-4">
-                {PHI_ROWS.map((row) => (
-                  <li key={row} className="flex items-start gap-3">
-                    <span
-                      aria-hidden="true"
-                      className="mt-px select-none text-white"
-                    >
-                      ✓
-                    </span>
-                    <span className="text-[14px] leading-[1.5] text-white">
-                      {row}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </Reveal>
+          <div className="mt-14 grid gap-6 md:grid-cols-2">
+            {/* Left — research tools, dimmed glass */}
+            <Reveal from="left">
+              <div className="glass-subtle shadow-card h-full rounded-[24px] p-8 opacity-80">
+                <p className={SECTION_LABEL}>Research Tools</p>
+                <p className="mt-2 text-[12px] text-c-600">
+                  NotebookLM, ChatGPT, Perplexity
+                </p>
+                <ul className="mt-7 space-y-4">
+                  {RESEARCH_ROWS.map((row) => (
+                    <li key={row} className="flex items-start gap-3">
+                      <span
+                        aria-hidden="true"
+                        className="mt-px select-none text-c-600"
+                      >
+                        ×
+                      </span>
+                      <span className="text-[14px] leading-[1.5] text-c-500">
+                        {row}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+
+            {/* Right — Phi, standard glass, gold left edge, slightly elevated */}
+            <Reveal from="right" delay={120}>
+              <div
+                className="glass-standard shadow-card h-full rounded-[24px] p-8 md:-translate-y-2"
+                style={{ borderLeft: "2px solid var(--color-accent)" }}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">
+                  Phi
+                </p>
+                <p className="mt-2 text-[12px] text-c-500">
+                  Your tutor, built from your material
+                </p>
+                <ul className="mt-7 space-y-4">
+                  {PHI_ROWS.map((row) => (
+                    <li key={row} className="flex items-start gap-3">
+                      <span
+                        aria-hidden="true"
+                        className="mt-px select-none text-white"
+                      >
+                        ✓
+                      </span>
+                      <span className="text-[14px] leading-[1.5] text-white">
+                        {row}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+          </div>
         </div>
+
+        <SectionBleed />
       </section>
 
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 3 — How It Works
           Three numbered glass cards, each reveal staggered by 150ms.
       ════════════════════════════════════════════════════════════════════ */}
-      <section
-        id="how"
-        className="relative mx-auto max-w-5xl scroll-mt-8 px-6 py-28"
-      >
-        <Reveal>
-          <p className={SECTION_LABEL}>How It Works</p>
-          <h2 className={`${H1} mt-4`}>Three steps to mastery.</h2>
-        </Reveal>
+      <section id="how" className={SECTION}>
+        <div className="mx-auto w-full max-w-5xl">
+          <Reveal>
+            <p className={SECTION_LABEL}>How It Works</p>
+            <h2 className={`${H1} mt-4`}>Three steps to mastery.</h2>
+          </Reveal>
 
-        <div className="mt-14 grid gap-6 md:grid-cols-3">
-          {STEPS.map((step, i) => (
-            <Reveal key={step.n} from="up" delay={i * 150}>
-              <div className="glass-standard shadow-card h-full rounded-[24px] p-8">
-                <span
-                  aria-hidden="true"
-                  className="block text-[56px] font-bold leading-none tracking-[-0.04em] text-c-700"
-                >
-                  {step.n}
-                </span>
-                <h3 className="mt-7 text-[20px] font-bold tracking-[-0.01em] text-white">
-                  {step.title}
-                </h3>
-                <p className="mt-3 text-[14px] leading-[1.6] text-c-400">
-                  {step.body}
-                </p>
-              </div>
-            </Reveal>
-          ))}
+          <div className="mt-14 grid gap-6 md:grid-cols-3">
+            {STEPS.map((step, i) => (
+              <Reveal key={step.n} from="up" delay={i * 150}>
+                <div className="glass-standard shadow-card h-full rounded-[24px] p-8">
+                  <span
+                    aria-hidden="true"
+                    className="block text-[56px] font-bold leading-none tracking-[-0.04em] text-c-700"
+                  >
+                    {step.n}
+                  </span>
+                  <h3 className="mt-7 text-[20px] font-bold tracking-[-0.01em] text-white">
+                    {step.title}
+                  </h3>
+                  <p className="mt-3 text-[14px] leading-[1.6] text-c-400">
+                    {step.body}
+                  </p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
         </div>
+
+        <SectionBleed />
       </section>
 
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 4 — The Lesson Experience
           Three alternating feature rows, each with a mock visual built from the
-          real app's UI language.
+          real app's UI language. Taller than one viewport — it grows past the
+          min-height and scrolls before snapping on.
       ════════════════════════════════════════════════════════════════════ */}
-      <section className="relative mx-auto max-w-5xl px-6 py-28">
-        <Reveal>
-          <p className={SECTION_LABEL}>The Experience</p>
-          <h2 className={`${H1} mt-4`}>A tutor that knows your material.</h2>
-        </Reveal>
-
-        {/* Feature 1 — text left, visual right */}
-        <div className="mt-20 grid items-center gap-10 md:grid-cols-2">
-          <Reveal from="left">
-            <h3 className="text-[clamp(22px,3.5vw,26px)] font-bold leading-[1.2] tracking-[-0.02em] text-white">
-              Structured lessons, not document dumps.
-            </h3>
-            <p className="mt-5 max-w-md text-[15px] leading-[1.65] text-c-300">
-              Every upload becomes a titled, navigable lesson with an
-              introduction, sections, and key takeaways. Built from your
-              material, in a voice that teaches.
-            </p>
+      <section className={SECTION}>
+        <div className="mx-auto w-full max-w-5xl">
+          <Reveal>
+            <p className={SECTION_LABEL}>The Experience</p>
+            <h2 className={`${H1} mt-4`}>A tutor that knows your material.</h2>
           </Reveal>
 
-          <Reveal from="right" delay={120}>
-            <MockLesson />
-          </Reveal>
+          {/* Feature 1 — text left, visual right */}
+          <div className="mt-20 grid items-center gap-10 md:grid-cols-2">
+            <Reveal from="left">
+              <h3 className="text-[clamp(22px,3.5vw,26px)] font-bold leading-[1.2] tracking-[-0.02em] text-white">
+                Structured lessons, not document dumps.
+              </h3>
+              <p className="mt-5 max-w-md text-[15px] leading-[1.65] text-c-300">
+                Every upload becomes a titled, navigable lesson with an
+                introduction, sections, and key takeaways. Built from your
+                material, in a voice that teaches.
+              </p>
+            </Reveal>
+
+            <Reveal from="right" delay={120}>
+              <MockLesson />
+            </Reveal>
+          </div>
+
+          {/* Feature 2 — reversed: visual left, text right (on desktop) */}
+          <div className="mt-24 grid items-center gap-10 md:grid-cols-2">
+            <Reveal from="right" delay={120} className="md:order-2">
+              <h3 className="text-[clamp(22px,3.5vw,26px)] font-bold leading-[1.2] tracking-[-0.02em] text-white">
+                Ask anything. Mid-lesson.
+              </h3>
+              <p className="mt-5 max-w-md text-[15px] leading-[1.65] text-c-300">
+                The chat sidebar is always there. Ask for a simpler explanation.
+                Ask what you missed. Ask to skip ahead with a recap. It reads
+                your material — it knows the answers.
+              </p>
+            </Reveal>
+
+            <Reveal from="left" className="md:order-1">
+              <MockChat />
+            </Reveal>
+          </div>
+
+          {/* Feature 3 — text left, visual right */}
+          <div className="mt-24 grid items-center gap-10 md:grid-cols-2">
+            <Reveal from="left">
+              <h3 className="text-[clamp(22px,3.5vw,26px)] font-bold leading-[1.2] tracking-[-0.02em] text-white">
+                Read along. Remember more.
+              </h3>
+              <p className="mt-5 max-w-md text-[15px] leading-[1.65] text-c-300">
+                The lesson reads itself aloud while you follow the text. Two
+                senses engaged. One subject mastered.
+              </p>
+            </Reveal>
+
+            <Reveal from="right" delay={120}>
+              <MockAudio />
+            </Reveal>
+          </div>
         </div>
 
-        {/* Feature 2 — reversed: visual left, text right (on desktop) */}
-        <div className="mt-24 grid items-center gap-10 md:grid-cols-2">
-          <Reveal from="right" delay={120} className="md:order-2">
-            <h3 className="text-[clamp(22px,3.5vw,26px)] font-bold leading-[1.2] tracking-[-0.02em] text-white">
-              Ask anything. Mid-lesson.
-            </h3>
-            <p className="mt-5 max-w-md text-[15px] leading-[1.65] text-c-300">
-              The chat sidebar is always there. Ask for a simpler explanation.
-              Ask what you missed. Ask to skip ahead with a recap. It reads your
-              material — it knows the answers.
-            </p>
-          </Reveal>
-
-          <Reveal from="left" className="md:order-1">
-            <MockChat />
-          </Reveal>
-        </div>
-
-        {/* Feature 3 — text left, visual right */}
-        <div className="mt-24 grid items-center gap-10 md:grid-cols-2">
-          <Reveal from="left">
-            <h3 className="text-[clamp(22px,3.5vw,26px)] font-bold leading-[1.2] tracking-[-0.02em] text-white">
-              Read along. Remember more.
-            </h3>
-            <p className="mt-5 max-w-md text-[15px] leading-[1.65] text-c-300">
-              The lesson reads itself aloud while you follow the text. Two senses
-              engaged. One subject mastered.
-            </p>
-          </Reveal>
-
-          <Reveal from="right" delay={120}>
-            <MockAudio />
-          </Reveal>
-        </div>
+        <SectionBleed />
       </section>
 
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 5 — Credibility
           A single centered statement. The product's north star, stated plainly.
       ════════════════════════════════════════════════════════════════════ */}
-      <section className="relative mx-auto max-w-3xl px-6 py-32 text-center">
-        <Reveal>
-          <p className={SECTION_LABEL}>Built by a student, for students</p>
-          <blockquote className="mt-9 text-[clamp(22px,3.6vw,30px)] font-bold leading-[1.4] tracking-[-0.02em] text-c-400">
-            &ldquo;A student opens Phi, uploads their notes,
-            <br className="hidden md:block" /> and 20 minutes later understands
-            the material better
-            <br className="hidden md:block" /> than they would have after 2 hours
-            of passive reading.&rdquo;
-          </blockquote>
-          <p className="mt-9 text-[13px] text-c-500">
-            That&apos;s the only metric that matters.
-          </p>
-        </Reveal>
+      <section className={`${SECTION} text-center`}>
+        <div className="mx-auto w-full max-w-3xl">
+          <Reveal>
+            <p className={SECTION_LABEL}>Built by a student, for students</p>
+            <blockquote className="mt-9 text-[clamp(22px,3.6vw,30px)] font-bold leading-[1.4] tracking-[-0.02em] text-c-400">
+              &ldquo;A student opens Phi, uploads their notes,
+              <br className="hidden md:block" /> and 20 minutes later understands
+              the material better
+              <br className="hidden md:block" /> than they would have after 2
+              hours of passive reading.&rdquo;
+            </blockquote>
+            <p className="mt-9 text-[13px] text-c-500">
+              That&apos;s the only metric that matters.
+            </p>
+          </Reveal>
+        </div>
+
+        <SectionBleed />
       </section>
 
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 6 — Final CTA + Footer
-          Slightly elevated from the page via a faint radial glow.
+          Full viewport: CTA centered in the space, footer pinned at the bottom.
+          Slightly elevated from the page via a faint radial glow. Last section,
+          so no bleed.
       ════════════════════════════════════════════════════════════════════ */}
-      <section className="relative overflow-hidden px-6 pt-32 pb-16">
+      <section className="relative flex min-h-screen snap-start flex-col overflow-hidden px-6">
         {/* Very subtle lift off the page background. */}
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(ellipse 60% 50% at 50% 35%, rgba(255,255,255,0.03) 0%, transparent 70%)",
+              "radial-gradient(ellipse 60% 50% at 50% 40%, rgba(255,255,255,0.03) 0%, transparent 70%)",
           }}
         />
 
-        <Reveal className="relative text-center">
+        <Reveal className="relative flex flex-1 flex-col items-center justify-center text-center">
           <h2 className="text-[clamp(36px,7vw,52px)] font-bold leading-[1.05] tracking-[-0.04em] text-white">
             Upload your first document.
           </h2>
@@ -350,7 +370,7 @@ export default function Home() {
         </Reveal>
 
         {/* Footer */}
-        <footer className="relative mx-auto mt-28 max-w-5xl border-t border-c-850 pt-10">
+        <footer className="relative mx-auto w-full max-w-5xl border-t border-c-850 py-10">
           <div className="flex flex-col items-center gap-4 text-center">
             <div className="flex items-center gap-2.5">
               <span aria-hidden="true" className="text-[20px] text-accent">
@@ -386,6 +406,22 @@ export default function Home() {
         </footer>
       </section>
     </main>
+  );
+}
+
+/* ── SectionBleed ────────────────────────────────────────────────────────────
+   A glass edge that fades the bottom of a section into the next one. Sticky to
+   the viewport bottom while its section is in view; `-mb-20` cancels its own
+   height in flex flow so it doesn't shift the section's centred content. */
+function SectionBleed() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none sticky bottom-0 z-0 -mb-20 h-20 w-full"
+      style={{
+        background: "linear-gradient(to bottom, transparent, rgba(8,8,8,0.95))",
+      }}
+    />
   );
 }
 
@@ -457,7 +493,7 @@ function MockAudio() {
         Now reading
       </div>
       {/* The floating capsule, lifted straight from the lesson view. */}
-      <div className="shadow-card flex items-center gap-7 rounded-2xl border border-white/10 bg-zinc-900/90 px-7 py-4">
+      <div className="glass-standard shadow-card flex items-center gap-7 rounded-full px-7 py-4">
         <Squares2X2Icon className="h-5 w-5 text-white/60" />
         <AcademicCapIcon className="h-5 w-5 text-white/60" />
         <PauseIcon className="h-5 w-5 text-accent" />
