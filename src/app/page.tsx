@@ -7,6 +7,7 @@ import {
   ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import Reveal from "@/components/Reveal";
+import SectionNav from "@/components/SectionNav";
 
 /**
  * Phi's marketing landing page.
@@ -38,6 +39,17 @@ const BTN_PRIMARY =
   "inline-flex items-center justify-center rounded-full bg-white px-7 py-3.5 text-[11px] font-bold uppercase tracking-[0.1em] text-black transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-c-100 hover:-translate-y-0.5 hover:shadow-[0_2px_10px_rgba(0,0,0,0.55)]";
 const BTN_SECONDARY =
   "inline-flex items-center justify-center rounded-full border border-c-500 px-7 py-3.5 text-[11px] font-bold uppercase tracking-[0.1em] text-white transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-white";
+
+// Landing card surface: the glass container look, plus a slow hover lift and a
+// brightening edge so each "unit" (a comparison column, a step) feels like a
+// tactile, distinct card rather than floating text.
+const CARD =
+  "glass-standard shadow-card h-full rounded-[24px] p-8 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1.5 hover:border-white/20 hover:shadow-[0_18px_60px_rgba(0,0,0,0.85)]";
+
+// Pagination firmness: forces the scroller to halt on each viewport-height
+// section (one scroll gesture = one page). Deliberately left OFF the taller-
+// than-viewport Experience section, whose overflow must stay freely scrollable.
+const SNAP = "[scroll-snap-stop:always]";
 
 // The three "how it works" steps. Numbered, staggered on reveal.
 const STEPS = [
@@ -77,16 +89,23 @@ const PHI_ROWS = [
 export default function Home() {
   return (
     <main className="snap-page relative">
+      {/* Pagination rail — fixed dots (lg+) that track the active section and
+          jump to any of the six on click. */}
+      <SectionNav />
+
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 1 — Hero
           Full viewport, centered. The φ mark and each line stagger in on the
           slow 900ms hero tempo.
       ════════════════════════════════════════════════════════════════════ */}
-      <section className="relative flex min-h-screen snap-start flex-col items-center justify-center px-6 text-center">
+      <section
+        id="hero"
+        className={`relative flex min-h-screen snap-start ${SNAP} flex-col items-center justify-center px-6 text-center`}
+      >
         <Reveal hero from="up">
           <span
             aria-hidden="true"
-            className="block text-[64px] leading-none text-accent"
+            className="block text-[64px] leading-none text-accent [text-shadow:0_0_44px_rgba(212,167,74,0.35)]"
           >
             φ
           </span>
@@ -103,7 +122,7 @@ export default function Home() {
         </Reveal>
 
         <Reveal hero from="up" delay={240}>
-          <p className="mx-auto mt-7 max-w-xl text-[18px] leading-[1.6] text-c-400">
+          <p className="mx-auto mt-7 max-w-xl text-[18px] leading-[1.6] text-secondary">
             Upload your study material. Phi structures it into lessons, teaches
             it back to you, and doesn&apos;t stop until you&apos;ve got it.
           </p>
@@ -138,7 +157,7 @@ export default function Home() {
           Two glass cards. Research tools (dimmed, ×) slide in from the left;
           Phi (gold-edged, ✓) from the right.
       ════════════════════════════════════════════════════════════════════ */}
-      <section id="compare" className={SECTION}>
+      <section id="compare" className={`${SECTION} ${SNAP}`}>
         <div className="mx-auto w-full max-w-5xl">
           <Reveal>
             <p className={SECTION_LABEL}>The Difference</p>
@@ -176,7 +195,7 @@ export default function Home() {
             {/* Right — Phi, standard glass, gold left edge, slightly elevated */}
             <Reveal from="right" delay={120}>
               <div
-                className="glass-standard shadow-card h-full rounded-[24px] p-8 md:-translate-y-2"
+                className="glass-standard shadow-card h-full rounded-[24px] p-8 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-white/20 hover:shadow-[0_18px_60px_rgba(0,0,0,0.85)] md:-translate-y-2 md:hover:-translate-y-3.5"
                 style={{ borderLeft: "2px solid var(--color-accent)" }}
               >
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">
@@ -212,7 +231,7 @@ export default function Home() {
           SECTION 3 — How It Works
           Three numbered glass cards, each reveal staggered by 150ms.
       ════════════════════════════════════════════════════════════════════ */}
-      <section id="how" className={SECTION}>
+      <section id="how" className={`${SECTION} ${SNAP}`}>
         <div className="mx-auto w-full max-w-5xl">
           <Reveal>
             <p className={SECTION_LABEL}>How It Works</p>
@@ -222,7 +241,7 @@ export default function Home() {
           <div className="mt-14 grid gap-6 md:grid-cols-3">
             {STEPS.map((step, i) => (
               <Reveal key={step.n} from="up" delay={i * 150}>
-                <div className="glass-standard shadow-card h-full rounded-[24px] p-8">
+                <div className={CARD}>
                   <span
                     aria-hidden="true"
                     className="block text-[56px] font-bold leading-none tracking-[-0.04em] text-c-700"
@@ -250,7 +269,7 @@ export default function Home() {
           real app's UI language. Taller than one viewport — it grows past the
           min-height and scrolls before snapping on.
       ════════════════════════════════════════════════════════════════════ */}
-      <section className={SECTION}>
+      <section id="experience" className={SECTION}>
         <div className="mx-auto w-full max-w-5xl">
           <Reveal>
             <p className={SECTION_LABEL}>The Experience</p>
@@ -263,7 +282,7 @@ export default function Home() {
               <h3 className="text-[clamp(22px,3.5vw,26px)] font-bold leading-[1.2] tracking-[-0.02em] text-white">
                 Structured lessons, not document dumps.
               </h3>
-              <p className="mt-5 max-w-md text-[15px] leading-[1.65] text-c-300">
+              <p className="mt-5 max-w-md text-[15px] leading-[1.65] text-secondary">
                 Every upload becomes a titled, navigable lesson with an
                 introduction, sections, and key takeaways. Built from your
                 material, in a voice that teaches.
@@ -281,7 +300,7 @@ export default function Home() {
               <h3 className="text-[clamp(22px,3.5vw,26px)] font-bold leading-[1.2] tracking-[-0.02em] text-white">
                 Ask anything. Mid-lesson.
               </h3>
-              <p className="mt-5 max-w-md text-[15px] leading-[1.65] text-c-300">
+              <p className="mt-5 max-w-md text-[15px] leading-[1.65] text-secondary">
                 The chat sidebar is always there. Ask for a simpler explanation.
                 Ask what you missed. Ask to skip ahead with a recap. It reads
                 your material — it knows the answers.
@@ -299,7 +318,7 @@ export default function Home() {
               <h3 className="text-[clamp(22px,3.5vw,26px)] font-bold leading-[1.2] tracking-[-0.02em] text-white">
                 Read along. Remember more.
               </h3>
-              <p className="mt-5 max-w-md text-[15px] leading-[1.65] text-c-300">
+              <p className="mt-5 max-w-md text-[15px] leading-[1.65] text-secondary">
                 The lesson reads itself aloud while you follow the text. Two
                 senses engaged. One subject mastered.
               </p>
@@ -318,19 +337,18 @@ export default function Home() {
           SECTION 5 — Credibility
           A single centered statement. The product's north star, stated plainly.
       ════════════════════════════════════════════════════════════════════ */}
-      <section className={`${SECTION} text-center`}>
+      <section id="proof" className={`${SECTION} ${SNAP} text-center`}>
         <div className="mx-auto w-full max-w-3xl">
           <Reveal>
             <p className={SECTION_LABEL}>Built by a student, for students</p>
-            <blockquote className="mt-9 text-[clamp(22px,3.6vw,30px)] font-bold leading-[1.4] tracking-[-0.02em] text-c-400">
-              &ldquo;A student opens Phi, uploads their notes,
-              <br className="hidden md:block" /> and 20 minutes later understands
-              the material better
-              <br className="hidden md:block" /> than they would have after 2
-              hours of passive reading.&rdquo;
+            {/* The promise, stated plainly and lit in Phi's gold so it carries
+                the section on its own. */}
+            <blockquote className="mt-9 text-[clamp(26px,4.4vw,38px)] font-bold leading-[1.3] tracking-[-0.02em] text-accent [text-shadow:0_0_50px_rgba(212,167,74,0.22)]">
+              &ldquo;A product where you can actually learn something quickly with
+              AI.&rdquo;
             </blockquote>
             <p className="mt-9 text-[13px] text-c-500">
-              That&apos;s the only metric that matters.
+              That&apos;s the whole point of Phi.
             </p>
           </Reveal>
         </div>
@@ -344,7 +362,10 @@ export default function Home() {
           Slightly elevated from the page via a faint radial glow. Last section,
           so no bleed.
       ════════════════════════════════════════════════════════════════════ */}
-      <section className="relative flex min-h-screen snap-start flex-col overflow-hidden px-6">
+      <section
+        id="start"
+        className={`relative flex min-h-screen snap-start ${SNAP} flex-col overflow-hidden px-6`}
+      >
         {/* Very subtle lift off the page background. */}
         <div
           aria-hidden="true"
@@ -359,7 +380,7 @@ export default function Home() {
           <h2 className="text-[clamp(36px,7vw,52px)] font-bold leading-[1.05] tracking-[-0.04em] text-white">
             Upload your first document.
           </h2>
-          <p className="mx-auto mt-6 max-w-md text-[18px] leading-[1.6] text-c-400">
+          <p className="mx-auto mt-6 max-w-md text-[18px] leading-[1.6] text-secondary">
             Free. No credit card. Your API key is yours.
           </p>
           <div className="mt-11">
@@ -369,9 +390,11 @@ export default function Home() {
           </div>
         </Reveal>
 
-        {/* Footer */}
-        <footer className="relative mx-auto w-full max-w-5xl border-t border-c-850 py-10">
-          <div className="flex flex-col items-center gap-4 text-center">
+        {/* Footer — the top hairline breaks out of the section's px-6 via -mx-6
+            so it spans the full window width, and is kept faint (white/6%) so it
+            separates without shouting. */}
+        <footer className="relative -mx-6 border-t border-white/[0.06]">
+          <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-4 px-6 py-10 text-center">
             <div className="flex items-center gap-2.5">
               <span aria-hidden="true" className="text-[20px] text-accent">
                 φ
