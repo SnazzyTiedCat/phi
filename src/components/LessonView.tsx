@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import {
@@ -9,6 +10,8 @@ import {
   PlayIcon,
   PauseIcon,
   ChatBubbleLeftIcon,
+  EllipsisHorizontalIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 /**
@@ -1106,35 +1109,152 @@ function LessonLoading() {
 // state, so flipping one doesn't touch the others.
 function FlipCard({ front, back }: Flashcard) {
   const [flipped, setFlipped] = useState(false);
+  // Whether either face's text is taller than the card can show (so we offer the
+  // "expand" affordance), and whether the full-text modal is open.
+  const [overflows, setOverflows] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const frontRef = useRef<HTMLParagraphElement>(null);
+  const backRef = useRef<HTMLParagraphElement>(null);
+
+  // Detect overflow by comparing each clamped face's full content height
+  // (scrollHeight) against its visible height (clientHeight). line-clamp-6 caps
+  // the visible height at 6 lines, so a longer answer makes scrollHeight win. A
+  // ResizeObserver re-checks when the web font swaps in or the column reflows,
+  // both of which can change the line count. The +1 absorbs sub-pixel rounding.
+  useEffect(() => {
+    const f = frontRef.current;
+    const b = backRef.current;
+    if (!f && !b) return;
+
+    const check = () => {
+      const over =
+        (!!f && f.scrollHeight > f.clientHeight + 1) ||
+        (!!b && b.scrollHeight > b.clientHeight + 1);
+      setOverflows(over);
+    };
+    check();
+
+    const ro = new ResizeObserver(check);
+    if (f) ro.observe(f);
+    if (b) ro.observe(b);
+    return () => ro.disconnect();
+  }, [front, back]);
+
+  // While the modal is open: close on Escape and lock background scroll so the
+  // page behind doesn't move under the overlay.
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpanded(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [expanded]);
 
   return (
-    <button
-      type="button"
-      onClick={() => setFlipped((f) => !f)}
-      aria-pressed={flipped}
-      className="h-44 w-full cursor-pointer text-left [perspective:1000px]"
-    >
-      <div
-        className={`
-          relative h-full w-full rounded-2xl transition-transform duration-300
-          [transform-style:preserve-3d]
-          ${flipped ? "[transform:rotateY(180deg)]" : ""}
-        `}
+    // A positioning wrapper so the ellipsis can sit OUTSIDE the flip <button>
+    // (a button can't legally nest another button) yet overlap its corner.
+    <div className="relative h-44 w-full">
+      <button
+        type="button"
+        onClick={() => setFlipped((f) => !f)}
+        aria-pressed={flipped}
+        className="h-full w-full cursor-pointer text-left [perspective:1000px]"
       >
-        {/* Front — the question/term. */}
-        <div className="absolute inset-0 flex flex-col justify-center gap-2 overflow-y-auto rounded-2xl border border-white/10 bg-surface p-5 [backface-visibility:hidden]">
-          <span className="text-xs uppercase tracking-wide text-muted">Question</span>
-          <p className="text-sm leading-relaxed text-text">{front}</p>
-        </div>
+        <div
+          className={`
+            relative h-full w-full rounded-2xl transition-transform duration-300
+            [transform-style:preserve-3d]
+            ${flipped ? "[transform:rotateY(180deg)]" : ""}
+          `}
+        >
+          {/* Front — the question/term. */}
+          <div className="absolute inset-0 flex flex-col justify-center gap-2 overflow-hidden rounded-2xl border border-white/10 bg-surface p-5 [backface-visibility:hidden]">
+            <span className="text-xs uppercase tracking-wide text-muted">Question</span>
+            <p ref={frontRef} className="line-clamp-6 text-sm leading-relaxed text-text">
+              {front}
+            </p>
+          </div>
 
-        {/* Back — the answer/definition. Pre-rotated 180° so it reads correctly
-            once the card flips, and gold-accented to signal the flipped state. */}
-        <div className="absolute inset-0 flex flex-col justify-center gap-2 overflow-y-auto rounded-2xl border border-accent/60 bg-accent/5 p-5 [transform:rotateY(180deg)] [backface-visibility:hidden]">
-          <span className="text-xs uppercase tracking-wide text-accent">Answer</span>
-          <p className="text-sm leading-relaxed text-text">{back}</p>
+          {/* Back — the answer/definition. Pre-rotated 180° so it reads correctly
+              once the card flips, and gold-accented to signal the flipped state. */}
+          <div className="absolute inset-0 flex flex-col justify-center gap-2 overflow-hidden rounded-2xl border border-accent/60 bg-accent/5 p-5 [transform:rotateY(180deg)] [backface-visibility:hidden]">
+            <span className="text-xs uppercase tracking-wide text-accent">Answer</span>
+            <p ref={backRef} className="line-clamp-6 text-sm leading-relaxed text-text">
+              {back}
+            </p>
+          </div>
         </div>
-      </div>
-    </button>
+      </button>
+
+      {/* Expand affordance — only when a face is truncated. Sits above the card
+          (z-10) and is a sibling of the flip button, so clicking it opens the
+          modal without also flipping the card. */}
+      {overflows && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(true);
+          }}
+          aria-label="Show full flashcard"
+          className="absolute bottom-2 right-2 z-10 rounded-full bg-white/10 p-1 text-white/70 backdrop-blur-sm transition-colors hover:bg-white/20 hover:text-white"
+        >
+          <EllipsisHorizontalIcon className="h-4 w-4" />
+        </button>
+      )}
+
+      {/* Full-text modal — portaled to <body> so its fixed positioning anchors to
+          the viewport, not to PageTransition's lingering transform. Only ever
+          rendered after a client click (expanded starts false), so document.body
+          is guaranteed present — no SSR guard needed. */}
+      {expanded &&
+        createPortal(
+          <div
+            onClick={() => setExpanded(false)}
+            className="animate-overlay-in fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Flashcard"
+              onClick={(e) => e.stopPropagation()}
+              className="animate-modal-in relative w-full max-w-lg rounded-3xl border border-white/10 bg-zinc-900/90 p-8 shadow-2xl backdrop-blur-xl"
+            >
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                aria-label="Close"
+                className="absolute right-4 top-4 rounded-full p-1 text-muted transition-colors hover:text-text"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+
+              <div className="space-y-6">
+                <div>
+                  <span className="text-xs uppercase tracking-wide text-muted">
+                    Question
+                  </span>
+                  <p className="mt-2 text-sm leading-relaxed text-text">{front}</p>
+                </div>
+                <div className="h-px w-full bg-white/10" />
+                <div>
+                  <span className="text-xs uppercase tracking-wide text-accent">
+                    Answer
+                  </span>
+                  <p className="mt-2 text-sm leading-relaxed text-text">{back}</p>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </div>
   );
 }
 

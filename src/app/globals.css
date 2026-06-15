@@ -46,6 +46,11 @@
   --animate-orb-drift: orb-drift 28s ease-in-out infinite alternate;
   /* Hero scroll indicator — a slow breathing pulse. */
   --animate-breathe: breathe 3s ease-in-out infinite;
+
+  /* Flashcard "expand" modal — the card scales up from 95% as it fades in (the
+     Spades expo curve); the dimmed backdrop just fades. */
+  --animate-modal-in: modal-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-overlay-in: overlay-in 0.25s ease-out both;
 }
 
 /* The per-page entrance. Tailwind v4 turns the `--animate-page-in` theme var
@@ -129,6 +134,27 @@
   }
 }
 
+/* Flashcard modal: card scales + fades in; backdrop just fades. */
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 :root {
   --background: #080808;
   --foreground: #f0f0f0;
@@ -201,6 +227,22 @@ body {
   .glass-standard,
   .glass-subtle {
     background: #111111;
+  }
+}
+
+/* A material row's "⋮" options button. On touch devices (no hover) it's always
+   visible, since there's no hover to reveal it; on pointer devices it stays
+   hidden until the row is hovered, then fades in. `.group:hover` matches the
+   hovered row (each row carries Tailwind's `group` class). */
+.material-menu {
+  opacity: 1;
+}
+@media (hover: hover) {
+  .material-menu {
+    opacity: 0;
+  }
+  .group:hover .material-menu {
+    opacity: 1;
   }
 }
 
