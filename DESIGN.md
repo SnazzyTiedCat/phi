@@ -1,1024 +1,1170 @@
-# The Spades Company — Design & UX Specification
-**Version 1.0**  
-Last updated: June 2026  
-Domain: `thespades.co`  
-Stack: Next.js 14 (App Router) · Tailwind CSS · TypeScript · Vercel
+# The Spades Company — Product Design & UX Specification
+**Version 1.1**
+Last updated: June 2026
+Scope: iOS applications, watchOS applications, and web applications
+Companion document: `DESIGN.md` (website/marketing)
 
 ---
 
 ## Table of Contents
 
-1. [Brand Philosophy](#1-brand-philosophy)
-2. [Visual Design System](#2-visual-design-system)
-3. [Animation & Motion System](#3-animation--motion-system)
-4. [Copy Voice & Tone](#4-copy-voice--tone)
-5. [Site Architecture](#5-site-architecture)
-6. [Global Navigation](#6-global-navigation)
-7. [Homepage (/)](#7-homepage-)
-8. [Apps Listing Page (/apps)](#8-apps-listing-page-apps)
-9. [App Detail Page (/apps/slug)](#9-app-detail-page-appsslug)
-10. [Founder / Portfolio Page (/founder)](#10-founder--portfolio-page-founder)
-11. [Blog (/blog)](#11-blog-blog)
-12. [Developer Page (/developer)](#12-developer-page-developer)
-13. [Component Library](#13-component-library)
-14. [Responsive Behavior](#14-responsive-behavior)
-15. [Accessibility Standards](#15-accessibility-standards)
-16. [Performance Targets](#16-performance-targets)
-17. [Assumptions & Open Questions](#17-assumptions--open-questions)
+1. [Overview & Scope](#1-overview--scope)
+2. [Design Tokens](#2-design-tokens)
+3. [iOS Design Principles](#3-ios-design-principles)
+4. [Web App Design Principles](#4-web-app-design-principles)
+5. [Cross-App Consistency](#5-cross-app-consistency)
+6. [Navigation Patterns](#6-navigation-patterns)
+7. [Onboarding System](#7-onboarding-system)
+8. [Subscription & Paywall UI](#8-subscription--paywall-ui)
+9. [AI Processing States](#9-ai-processing-states)
+10. [Component Library — Apps](#10-component-library--apps)
+11. [Haptic Feedback — iOS](#11-haptic-feedback--ios)
+12. [Dynamic Island Integration](#12-dynamic-island-integration)
+13. [Widgets & Extensions](#13-widgets--extensions)
+14. [App Icons](#14-app-icons)
+15. [Per-Product Specification Guide](#15-per-product-specification-guide)
+16. [Suits Subscription Scope](#16-suits-subscription-scope)
+17. [Accessibility Standards](#17-accessibility-standards)
+18. [Performance Targets](#18-performance-targets)
+19. [Assumptions & Open Questions](#19-assumptions--open-questions)
 
 ---
 
-## 1. Brand Philosophy
+## 1. Overview & Scope
 
-### The Core Premise
-The Spades Company builds iOS-first and web applications where state-of-the-art AI meets world-class design. Each product earns its place — it exists because nothing else does what it does, the way it does it.
+### What This Document Covers
 
-### The Three Non-Negotiables
-1. **Precision** — Every pixel, every millisecond, every word is chosen. Nothing is accidental.
-2. **Smoothness** — The interface never fights the user. It anticipates, then disappears.
-3. **Restraint** — Adding nothing is often the hardest design decision. We make it often.
+This document governs all design and UX decisions for Spades Company **products** — the actual applications users run on their devices. It is distinct from `DESIGN.md`, which governs the marketing website.
 
-### The Bentley Principle
-The brand does not explain why it is good. It does not use the word "revolutionary," "seamless," "powerful," or "next-generation." Ever. The product makes the claim. The copy just names it. Confidence is demonstrated through quality — not through self-description.
+Platforms in scope:
+- iOS applications (primary platform)
+- watchOS applications (companion to iOS apps, where applicable)
+- Web applications (secondary, where applicable)
 
-### Brand Mark
-The spade symbol `♠` functions as the primary brand mark across all contexts:
-- App icon base element
-- Navigation anchor
-- Section dividers
-- Footer signature
-- Favicon
-It is never decorative. Every use is intentional and carries the weight of the full brand.
+Each individual product has its own specification document or appendix section (see §15 for the template). This document defines the **shared system** — the rules every product inherits regardless of what it does.
+
+### The Product Standard
+
+Every Spades Company product must pass three gates before shipping:
+
+1. **Does it earn its place?** It exists because nothing else does what it does, the way it does it. Not an improvement on an existing app — a replacement for a manual, expensive, or broken workflow.
+2. **Does the design carry the AI?** The AI is the core feature. The design's job is to make it feel inevitable, not technical.
+3. **Would it embarrass the brand if it shipped as-is?** The answer must be no.
+
+### Relationship to Website Design System
+
+All visual tokens from `DESIGN.md` apply here. Products share the same color system, typeface, spacing, radius, glass, shadow, and animation principles. Where platform constraints require adaptation, this document defines the adaptation — it does not grant permission to depart from the brand.
 
 ---
 
-## 2. Visual Design System
+## 2. Design Tokens
 
-### 2.1 Color — 14-Step Grayscale
+Products inherit the full token set from `DESIGN.md §2`. The following additions are app-specific.
 
-No accent color. Ever. Contrast carries all hierarchy.
+### 2.1 Additional Spacing — Touch & Mobile
 
-| Token | Hex | Primary Use |
+```
+--sp-safe-top:    env(safe-area-inset-top)
+--sp-safe-bottom: env(safe-area-inset-bottom)
+--sp-safe-left:   env(safe-area-inset-left)
+--sp-safe-right:  env(safe-area-inset-right)
+```
+
+All scrollable content and fixed bottom elements must respect safe area insets.
+
+### 2.2 Touch Target Minimum
+
+```
+--touch-min:         44px   /* Apple HIG minimum — all interactive elements */
+--touch-comfortable: 52px   /* Preferred for primary actions */
+```
+
+### 2.3 iOS Animation — SwiftUI Equivalents
+
+Web uses CSS cubic-bezier. iOS uses SwiftUI spring physics. The **feel** must match across platforms — the implementation differs.
+
+| Web Token | SwiftUI Equivalent | Use |
 |---|---|---|
-| `--c-black` | `#000000` | Deep backgrounds, absolute black |
-| `--c-950` | `#080808` | Main app background |
-| `--c-900` | `#111111` | Secondary background, cards |
-| `--c-850` | `#1A1A1A` | Elevated surfaces |
-| `--c-800` | `#222222` | Borders, subtle dividers |
-| `--c-700` | `#333333` | Inactive states |
-| `--c-600` | `#555555` | Disabled text |
-| `--c-500` | `#777777` | Tertiary text, placeholders |
-| `--c-400` | `#999999` | Secondary text, captions |
-| `--c-300` | `#BBBBBB` | Body text on dark |
-| `--c-200` | `#CCCCCC` | Secondary readable text |
-| `--c-100` | `#E5E5E5` | Near-white text |
-| `--c-50` | `#F2F2F2` | Off-white |
-| `--c-white` | `#FFFFFF` | Primary text, primary actions, active states |
+| `--ease-expo` | `.spring(response: 0.55, dampingFraction: 0.85)` | Standard enters, reveals |
+| `--ease-spring` | `.spring(response: 0.45, dampingFraction: 0.65)` | Touch responses, overshoot |
+| `--ease-refined` | `.easeInOut(duration: 0.28)` | All exits |
+| `--dur-film` | `.spring(response: 0.65, dampingFraction: 0.85)` | Section/screen reveals |
+| `--dur-reveal` | `.spring(response: 0.9, dampingFraction: 0.82)` | Full-screen transitions |
 
-**Hard rule:** These 14 values are the complete palette. No additional colors are added under any circumstance.
+In SwiftUI, prefer `.matchedGeometryEffect` for shared-element transitions between screens.
 
-### 2.2 Typography — Space Mono
-
-One typeface. Two weights. No exceptions.
+### 2.4 Z-Index / Layer Order (Web Apps)
 
 ```
-font-family: 'Space Mono', monospace;
-font-weight: 400 (Regular) | 700 (Bold)
+--z-base:       0     /* Static content */
+--z-elevated:   10    /* Cards on hover */
+--z-sticky:     20    /* Sticky headers */
+--z-overlay:    30    /* Dimmed backdrops */
+--z-modal:      40    /* Modals, sheets */
+--z-nav:        50    /* Navigation bar (always on top) */
+--z-toast:      60    /* Toast notifications */
 ```
 
-**Type Scale:**
+### 2.5 Product Accent Colors
+The Spades Company makreting site (thespades.co) uses no accent color by design. Products are different -- each product ships with exactly one accent color that defines its visual identity.
+# Rules
+- One accent per product. Never two.
+- The accent is used for: primary CTAs, active states, key highlights, the product's mark or logo
+- Never used for: body text, backgrounds, borders, secondary UI
+- The accentm ust pass WCAG AA contrast against `--c 950` when used for text
+Defined once in the product's spec and never changed without a version update
 
-| Name | Size | Weight | Tracking | Leading | Use |
-|---|---|---|---|---|---|
-| Display | 52px | 700 | -0.04em | 1.0 | Hero headlines |
-| H1 | 36px | 700 | -0.03em | 1.1 | Page titles |
-| H2 | 26px | 700 | -0.02em | 1.2 | Section headers |
-| H3 | 20px | 700 | -0.01em | 1.25 | Subsection headers |
-| Title | 17px | 700 | 0 | 1.3 | Card titles, UI labels |
-| Body | 14px | 400 | +0.01em | 1.65 | All reading text |
-| Caption | 12px | 400 | +0.02em | 1.5 | Metadata, timestamps |
-| Label | 10px | 700 | +0.20em | 1.4 | UPPERCASE labels, tags |
+---
 
-**Rules:**
-- Maximum 3 type sizes on any single screen
-- Bold for structure and labels only; Regular for all reading
-- Wide tracking (0.14–0.22em) exclusively for UPPERCASE labels
-- Minimum body size is 14px — Space Mono renders smaller than optical size suggests
-- Italic is permitted for emphasis only — never for decoration
+## 3. iOS Design Principles
 
-### 2.3 Spacing — Strict 8pt Grid
+### 3.1 HIG Compliance With Brand Override
 
-All spacing values are multiples of 4, with primary intervals at 8.
+Apple's Human Interface Guidelines define the baseline. Where the brand has an opinion that differs from HIG defaults, the brand wins — provided it does not harm usability or violate App Store Review Guidelines.
 
-```
---sp-1: 4px   --sp-2: 8px   --sp-3: 12px
---sp-4: 16px  --sp-5: 20px  --sp-6: 24px
---sp-8: 32px  --sp-10: 40px --sp-12: 48px
---sp-16: 64px --sp-20: 80px --sp-24: 96px
-```
+**Brand overrides HIG:**
+- Custom typeface (Space Mono) instead of SF Pro
+- Custom navigation bars — not `UINavigationBar`
+- Custom tab bar (glass, bottom-anchored) instead of `UITabBar`
+- Always dark — no light mode adaptation
+- Custom button styles — not `UIButton` system styles
 
-No off-grid values. If a spacing need doesn't fit the grid, question the layout before breaking the rule.
+**HIG overrides brand:**
+- Safe area insets — always respected
+- Minimum touch targets — 44px maintained
+- Standard system gestures (swipe back, pull to refresh) — preserved
+- Accessibility features (Dynamic Type, VoiceOver) — supported
+- System alerts (permission requests, App Store prompts) — use system UI
 
-### 2.4 Border Radius
+### 3.2 Typography on iOS
 
-```
---r-xs:   4px      → Tags, chips, small badges
---r-sm:   8px      → Small inputs, inline elements
---r-md:   12px     → Standard inputs, small cards
---r-lg:   16px     → Navigation pill, medium cards
---r-xl:   24px     → Large cards, panels
---r-2xl:  32px     → Hero cards, feature panels
---r-pill: 9999px   → Buttons, tags, the navigation pill
-```
+Space Mono is loaded as a custom font resource in every app. It is used for all text within the app UI.
 
-### 2.5 Glass System
+**Exception:** System-presented UI that cannot be customized (UIAlertController, system keyboards, ShareSheet) will render in SF Pro. This is acceptable — it marks the boundary between the app and the OS.
 
-Glass is applied **selectively**. It is reserved for surfaces that float above real content. Never applied to flat backgrounds — blur on flat is meaningless.
+**Dynamic Type:** Space Mono does not scale with Dynamic Type by default. We support it by providing size adjustments at the `accessibilityLarge` breakpoint and above:
+- Body: 14px to 17px
+- Caption: 12px to 15px
+- All others: +3px at accessibility sizes
 
-| Level | Background | Border | Blur | Use |
-|---|---|---|---|---|
-| Subtle | rgba(255,255,255,0.025) | rgba(255,255,255,0.055) | 18px | Contextual depth, active rows |
-| Standard | rgba(255,255,255,0.055) | rgba(255,255,255,0.10) | 18px | Navigation pill, cards, panels |
-| Prominent | rgba(255,255,255,0.09) | rgba(255,255,255,0.16) | 18px | Modals, sheets, menus, alerts |
-
-**Rules:**
-- Never stack two glass layers
-- Always pair glass surfaces with a shadow token
-- Never use glass for buttons — solid or outline only
-- Never apply to list cells — it repeats and degrades immediately
-
-### 2.6 Shadow System
+### 3.3 Status Bar
 
 ```
---sh-xs: 0 1px 3px rgba(0,0,0,0.5)
---sh-sm: 0 2px 10px rgba(0,0,0,0.55)
---sh-md: 0 4px 20px rgba(0,0,0,0.6)
---sh-lg: 0 8px 40px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.3)
---sh-xl: 0 20px 80px rgba(0,0,0,0.85), 0 4px 20px rgba(0,0,0,0.5)
+UIStatusBarStyle: .lightContent
 ```
 
-| Token | Use |
+White status bar text on all dark backgrounds. Never `.darkContent`.
+
+### 3.4 Keyboard Handling
+
+- All scroll views adjust for keyboard using `scrollDismissesKeyboard(.interactively)`
+- No content ever hides behind the keyboard
+- Inputs scroll into view automatically when focused
+- Custom input toolbar defined per-product where relevant (above keyboard)
+
+### 3.5 Gesture System
+
+Every gesture must feel intentional and discoverable.
+
+| Gesture | Action |
 |---|---|
-| `--sh-xs` | Subtle borders, minimal depth |
-| `--sh-sm` | Buttons on hover |
-| `--sh-md` | Cards, floating elements |
-| `--sh-lg` | Navigation pill, floating panels |
-| `--sh-xl` | Modals, bottom sheets |
+| Swipe left from edge | Back navigation (preserved from iOS default) |
+| Swipe down | Dismiss modal or sheet |
+| Long press | Context menu (when applicable) |
+| Pinch | Zoom on data visualizations and spatial views |
+| Double-tap | Zoom to fit / reset zoom on a visualization |
+| Drag | Selection within data views; reordering in lists |
 
-### 2.7 Atmospheric Background
-
-Every dark surface includes a very slow-moving radial gradient orb — barely perceptible, but adds depth to what would otherwise be a flat void:
-
-```css
-/* Primary orb — top right */
-background: radial-gradient(circle, rgba(255,255,255,0.011) 0%, transparent 65%);
-animation: orbDrift 28s ease-in-out infinite alternate;
-
-/* Secondary orb — bottom left */
-background: radial-gradient(circle, rgba(255,255,255,0.007) 0%, transparent 65%);
-/* Static — no animation */
-```
-
-This is always present at the layout level. Individual sections do not re-implement it.
+No gesture conflicts. If two gestures would compete on the same surface, redesign the surface.
 
 ---
 
-## 3. Animation & Motion System
+## 4. Web App Design Principles
 
-### 3.1 Philosophy
+### 4.1 Scope
 
-The animation tempo is **slow and cinematic** — Apple TV-style. Every transition feels considered. Nothing snaps. Nothing bounces aggressively. The interface moves with weight and intention.
+Web apps differ from the marketing site. They are **tools** — the user is logged in, has context, and expects density and functionality over cinematic presentation.
 
-> "If the user notices the animation before they notice what it revealed, it's too fast, too slow, or too much."
+### 4.2 Density
 
-### 3.2 Duration Tokens
+Web apps are moderately denser than the marketing site:
+- Tighter line height for data (1.4 vs 1.65)
+- Minimum font size in data-dense contexts: 12px
+- More elements per viewport permitted
+- Spacing tokens shift down one step in dense views (use `--sp-2` where the website uses `--sp-4`)
 
+### 4.3 Authentication States
+
+Every web app has three states:
+1. **Unauthenticated** — minimal chrome, sign-in focused
+2. **Authenticated, no data** — empty state, onboarding prompt
+3. **Authenticated, with data** — primary app experience
+
+Each state has distinct layout chrome. Navigation changes between states.
+
+### 4.4 Navigation on Web Apps
+
+Web apps use a **persistent left sidebar** on desktop (not the floating pill of the marketing site):
+- Width: 240px
+- Background: `--c-900`
+- Border-right: `1px solid --c-850`
+- Always visible on desktop; slide-out drawer on mobile
+
+Sidebar structure:
 ```
---dur-micro:  150ms   → Hover states, immediate feedback
---dur-fast:   250ms   → Button feedback, icon swaps
---dur-std:    400ms   → Tab switches, small reveals
---dur-film:   650ms   → Section entrances, card reveals
---dur-reveal: 900ms   → Page-level transitions, hero elements
-```
+♠ [App Name]         <- top, brand anchor
 
-### 3.3 Easing Tokens
+[Primary Nav Items]
 
-```
---ease-expo:    cubic-bezier(0.16, 1, 0.3, 1)   → Standard enters/reveals
---ease-smooth:  cubic-bezier(0.25, 0.46, 0.45, 0.94) → General-purpose smooth
---ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1)   → Touch responses, spring settle
---ease-refined: cubic-bezier(0.45, 0, 0.15, 1)       → All exits
-```
+[Spacer — flex: 1]
 
-### 3.4 Standard Motion Patterns
-
-**Fade Lift (standard enter):**
-```
-opacity: 0 → 1
-transform: translateY(20px) → translateY(0)
-duration: --dur-film
-easing: --ease-expo
-```
-
-**Cinematic Reveal (screen/section enter):**
-```
-opacity: 0 → 1
-transform: scale(0.96) translateY(8px) → scale(1) translateY(0)
-duration: --dur-reveal
-easing: --ease-expo
+[Settings]
+[Account]            <- bottom
 ```
 
-**Exit Dissolve (all exits):**
-```
-opacity: 1 → 0
-transform: translateY(0) scale(1) → translateY(-14px) scale(0.95)
-duration: --dur-fast to --dur-std (exits are always shorter than entrances)
-easing: --ease-refined
-```
-
-**Spring Settle (navigation, touch responses):**
-```
-Uses spring physics: cubic-bezier(0.34, 1.56, 0.64, 1)
-Slight overshoot on arrival (~8%)
-duration: --dur-std
-```
-
-**Staggered List Reveal:**
-```
-Each item: Fade Lift
-Delay between items: 50ms
-Maximum items that animate: 6 (beyond 6, all items appear simultaneously)
-```
-
-### 3.5 Scroll-Triggered Animations
-
-All non-hero sections reveal via IntersectionObserver:
-- Threshold: 0.06 (fires when 6% of element is visible)
-- Root margin: `0px 0px -32px 0px` (triggers slightly before element edge)
-- Each section: Fade Lift at `--dur-film`
-- Stagger between sections: 40ms
-- Hero section is exempt — it plays on load via CSS keyframes
-
-### 3.6 Animation Rules
-
-**Do:**
-- Always pair `opacity` + `transform` — never animate one alone
-- Use `--ease-expo` for all enters and page reveals
-- Make exits 50–60% shorter than their paired entrance
-- Use spring easing only for touch/tap responses and the navigation element
-- Keep page-level transitions at 650–900ms
-
-**Never:**
-- Animate `width`, `height`, `margin`, or `padding` — use `transform: scale()` instead
-- Animate more than 2 properties simultaneously
-- Use `linear` easing or default CSS `ease` anywhere
-- Add animation to disguise AI processing latency
-- Animate lists of more than 6 items with stagger
+On mobile (< 768px): sidebar collapses. A top-left icon reveals it as a full-height drawer over content.
 
 ---
 
-## 4. Copy Voice & Tone
+## 5. Cross-App Consistency
 
-### 4.1 The Standard
+Every Spades Company product must feel like it belongs to the same family. This is enforced through shared systems, not matching feature sets.
 
-**Subtle confidence.** The brand doesn't prove itself. It exists. The reader understands.
+### 5.1 The Shared Signature
 
-This is the Bentley principle applied to copy: a Bentley brochure doesn't say "our cars are luxurious." It says "Power. Beauty. Soul." — and stops there. The claim is made by specificity, not assertion.
+Regardless of what the app does, the following are constant across every product:
 
-Apple says "The world's most personal computer." Not "a very good computer." Declarative. Specific. Unprovable by anyone else, not because it's hyperbole, but because it's theirs.
+- Space Mono as default throughout
+- `--c-950` background
+- Slow cinematic animation (same spring values)
+- ♠ mark as the app icon primary element
+- Suits as the subscription surface
+- Same onboarding structure (§7)
+- Same paywall design (§8)
+- Same processing state patterns (§9)
+- Same component library (§10)
 
-### 4.2 Rules
+### 5.2 The Allowed Variation
 
-**Voice:**
-- Short, declarative sentences
-- Active voice only
-- Present tense unless quoting history
-- No explanations unless the reader asked
+Products may differ on:
+- Feature set and primary UI
+- Core UX metaphor (visualization type, interaction model, primary action)
+- Secondary icon element in the app icon (the ♠ base is constant)
+- Product-specific copy and taglines
 
-**Forbidden words and phrases:**
-- revolutionary, game-changing, next-generation, powerful
-- seamlessly, effortlessly, intuitively
-- "We believe that..." (just say the thing)
-- "Introducing..." (the product introduces itself)
-- "Simple yet powerful" (every startup says this)
-- Any sentence starting with "With [Product]..."
+### 5.3 What Makes a New App Feel "Spades"
 
-**Tone calibration by page:**
-| Page | Tone |
-|---|---|
-| Homepage Hero | Near-silent. One line. Let the mark do the work. |
-| Product pages | Precise. Name what the product does. |
-| About/Vision | Quiet conviction. Not a mission statement. A statement of fact. |
-| Founder page | Human, but edited. No false modesty, no credential-flexing. |
-| Blog | The writer's actual voice. Slightly less edited. |
-| Developer page | Technical confidence. Exact language. Numbers when possible. |
-
-### 4.3 Copy Examples
-
-**Correct:**
-> "Your voice. Without the noise."  
-> "Software that knows when to disappear."  
-> "Built for the recording, not the setup."  
-> "One subscription. Every app."  
-> "♠"  *(sometimes the mark alone is the line)*
-
-**Incorrect:**
-> "We've reimagined the audio experience for creators everywhere."  
-> "Powerful AI meets elegant design in our revolutionary new app."  
-> "Seamlessly remove background noise with just one tap."
-
-### 4.4 Headline Formula
-
-Most headlines follow one of three patterns:
-
-1. **The noun phrase:** "The Recording Session." "The Work." "The Standard."
-2. **The compression:** "Your voice. Without the noise." (two short clauses, second subverts the first)
-3. **The flat statement:** "Built different." "Software with a standard." "We make fewer things, better."
-
-Never use questions in headlines. The brand doesn't ask — it declares.
+A user encountering an unfamiliar Spades Company app should recognize the brand within 3 seconds — not from a label, but from the feel:
+- The font is Space Mono (by default unless changed)
+- The background is near-black (by default unless light mode is supported and enabled)
+- Everything moves slowly and settles with spring physics
+- The UI recedes — it never competes with the task
+- Startup loading animation that features a ♠ icon and a horizontally-minimal-sized progress bar that lasts a minimum amount of 1 second (by default unless changed)
 
 ---
 
-## 5. Site Architecture
+## 6. Navigation Patterns
 
-### 5.1 Page Map
+### 6.1 iOS Navigation
 
-```
-thespades.co
-│
-├── /                      Homepage (single-page scroll)
-│   ├── #hero              Brand + vision dual entrance
-│   ├── #apps              Featured products
-│   ├── #suits             Subscription model
-│   ├── #writing           Blog/research teaser
-│   └── footer
-│
-├── /apps                  Full app listing
-│   └── /apps/[slug]       Individual app deep-dive
-│
-├── /founder               CEO spotlight / portfolio (dual audience)
-│
-├── /blog                  Article listing
-│   └── /blog/[slug]       Individual post
-│
-└── /developer             Public research + future API docs
+**Stack navigation (drill-down):**
+```swift
+NavigationStack
+Transition: .navigationTransition(.slide) with spring
+Back gesture: system swipe-left-from-edge preserved
+Back button: custom (chevron.left, Space Mono label)
 ```
 
-### 5.2 Color Mode
+**Modal / Sheet navigation (contextual tasks):**
+```swift
+.sheet() or .fullScreenCover()
+Presentation: slide up from bottom, spring
+Dismiss: swipe down, or explicit close button (top-right x)
+.fullScreenCover: immersive single-task flows
+.sheet: settings, filters, output and export options
+```
 
-**Always dark.** No light mode toggle. No system-adaptive switching. The brand is built in black and white — the dark mode *is* the brand. A light version would require a separate design system that doesn't exist.
+**Custom Tab Bar (multi-section apps):**
 
-### 5.3 Page Transitions
+Not all products require a tab bar. Single-workflow apps must not show one. When a tab bar is appropriate:
+```
+Position:    bottom, above safe area
+Height:      56pt + safe area inset
+Background:  Glass Standard
+Border-top:  1pt solid var(--g-std-border)
+Items:       3 to 5 maximum
 
-Between pages (actual navigation, not section scrolling):
-- Current page: Exit Dissolve (opacity 1→0, translateY 0→-8px, 280ms)
-- Incoming page: Cinematic Reveal (opacity 0→1, scale 0.97→1, 900ms)
-- Handled at the layout level via Next.js App Router
+Active item:   icon + label, --c-white
+Inactive item: icon only (label hidden), --c-500
+Transition:    spring, 300ms
+```
+
+### 6.2 In-App Navigation Header
+
+Custom navigation header replaces `UINavigationBar`:
+
+```
+Height:     44pt + safe area top
+Background: transparent at top of scroll
+            --c-900 when scrolled (crossfade at ~40pt)
+Left:       Back button (in stack) or ♠ mark (at root)
+Center:     Screen title — Title size, Bold
+Right:      Context action: settings, share, or nothing
+
+Large title behavior:
+  Before 40pt scroll: large title below header, H1 size
+  After 40pt scroll:  title migrates into header center, Title size
+  Transition: opacity + translateY, 200ms, ease-expo
+```
+
+### 6.3 watchOS Navigation
+
+watchOS products follow a simplified navigation model:
+
+- Single-page or minimal stack — no deep drill-downs
+- Primary action occupies the majority of the watch face
+- Digital Crown used for scrolling and value adjustment
+- Complications link directly to the primary action screen
+- Tab bar is not used — the surface is too small
 
 ---
 
-## 6. Global Navigation
+## 7. Onboarding System
 
-### 6.1 Overview
+Every Spades Company app uses the same onboarding architecture. Content changes per product; the structure does not.
 
-The navigation has two distinct visual states and a directional transition logic between them. It is the most technically complex animation in the system.
-
-### 6.2 State 1 — Expanded Pill (default / on scroll-up)
-
-**Position:** Horizontally centered, fixed, 24px from top of viewport  
-**Shape:** Pill (border-radius: 9999px)  
-**Background:** Glass Standard  
-**Border:** 1px solid var(--g-std-border)  
-**Shadow:** var(--sh-lg)  
-**Height:** 48px  
-**Padding:** 0 8px  
-
-**Structure (left to right):**
-```
-[ ♠  ·  About  ·  Apps  ·  Suits  ·  Writing  ]  [  ·  ]  [ ··· ]
-  ↑                                                   ↑        ↑
-  Home anchor                              Visual     Separator More menu button
-                                           divider
-```
-
-- Nav links are `font-size: 12px, font-weight: 700, letter-spacing: 0.08em, uppercase`
-- Active section link: `color: --c-white`
-- Inactive links: `color: --c-400`
-- Hover: `color: --c-white` with `--dur-fast` transition
-- The **separator** (`·`) between the main links and the more button is a `1px` vertical rule at `--c-700`, height 20px, providing visual separation
-- The **More button** (`···`) opens a dropdown menu (see §6.4)
-- The ♠ mark on the left scrolls to top (not the #hero anchor — actual top of page)
-
-### 6.3 State 2 — Collapsed ♠ Button (on scroll-down > 80px)
-
-**Position:** Fixed, top: 24px, left: 24px  
-**Shape:** Rounded rectangle (border-radius: var(--r-xl) = 24px)  
-**Background:** Glass Standard  
-**Border:** 1px solid var(--g-std-border)  
-**Shadow:** var(--sh-md)  
-**Size:** 44px × 44px (Apple minimum touch target)  
-**Content:** ♠ mark, centered, `font-size: 18px`, `color: --c-white`  
-
-Clicking the ♠ button in this state:
-1. Scrolls to top of page
-2. Simultaneously triggers the expand animation back to State 1
-
-### 6.4 Transition — Expanded → Collapsed (scroll down past 80px)
-
-This is an **asymmetric directional motion**. The pill physically moves toward the corner as it collapses. It has weight.
+### 7.1 Structure
 
 ```
-Timeline (total: ~550ms):
-
-0ms     — Nav link text fades out (opacity 1→0, 150ms, ease-expo)
-0ms     — Pill begins moving left + shrinking (spring physics)
-         Width: full pill width → 44px
-         Position X: center → 24px from left
-         This movement uses: cubic-bezier(0.34, 1.56, 0.64, 1) [spring]
-         Duration: 450ms
-
-200ms   — ♠ mark fades in within shrinking container 
-         (opacity 0→1, 200ms, ease-expo)
-
-450ms   — Container arrives at top-left position
-         Spring overshoot: scale 1.0 → 1.06 → 1.0 (80ms settle)
+Screen 1:   Arrival
+Screen 2-3: Value Proposition (2 screens maximum)
+Screen 4:   Permission Request(s)
+Screen 5:   Paywall / Trial Offer
+-> App
 ```
 
-The spring overshoot on arrival (~6%) is the "rubber-banding" feel. It's subtle — just enough to feel physical, not enough to feel playful.
+### 7.2 Screen 1 — Arrival
 
-### 6.5 Transition — Collapsed → Expanded (scroll back up past 80px)
+**Purpose:** Brand recognition. Confirm the user is in the right place.
 
-This is **not** the reverse of the collapse. The pill does not slide back from the corner. Instead:
-
+**Layout:** Full screen, centered.
 ```
-Timeline (total: ~700ms):
+[♠ mark — slow fade in, 900ms]
+[App name — H1, Fade Lift 200ms after mark]
+[One-line tagline — Body, --c-400, Fade Lift 400ms after name]
 
-0ms     — ♠ button fades out in-place (opacity 1→0, 200ms, ease-refined)
-50ms    — New pill fades in at center position
-         opacity: 0 → 1
-         scale: 0.96 → 1
-         duration: 650ms, ease-expo
-200ms   — Nav link text fades in (opacity 0→1, 300ms, ease-expo)
-         Stagger: 30ms between each link
+[Continue ->] — primary button, above safe area, bottom of screen
 ```
 
-The asymmetry is intentional. Collapse has directional physicality (it goes somewhere). Expand is a reveal (it appears where it lives). This mirrors how real objects work — a retracted element doesn't necessarily re-extend the same path it left on.
+No explanatory copy on this screen. The mark and name are the statement. The tagline is the product's compressed headline (see `DESIGN.md §4.4` for the formula).
 
-### 6.6 More Menu Dropdown
+### 7.3 Screens 2–3 — Value Proposition
 
-Triggered by clicking the `···` button in the expanded pill, or the ♠ button in the collapsed state (long-press or secondary behavior TBD).
+**Maximum 2 screens.** If the app requires more than 2 screens to communicate its value, either the scope is too broad or the copy is under-edited.
 
-**Position:** Below the pill, centered on the `···` button  
-**Background:** Glass Prominent  
-**Border:** 1px solid var(--g-prom-border)  
-**Shadow:** var(--sh-xl)  
-**Border-radius:** var(--r-xl)  
-**Padding:** var(--sp-2) 0  
-
-**Menu items:**
+**Layout per screen:**
 ```
-/developer    → Developer
-/founder      → Founder  
-/[portfolio]  → Portfolio
-```
+[Large visual — top 55% of screen]
+  UI preview, abstract representation, or illustration.
+  No photography. No stock imagery.
 
-**Entrance animation:**
-```
-opacity: 0 → 1
-scale: 0.96 → 1  (transform-origin: top center)
-duration: 300ms, ease-expo
+[Feature name — Label, uppercase, --c-500]
+[Headline — H2]
+[Description — Body, --c-400, 2 lines maximum]
+[Progress dots — bottom center, --c-700 inactive / --c-white active]
+[Continue ->]
 ```
 
-**Exit animation:**
-```
-opacity: 1 → 0
-scale: 1 → 0.97
-duration: 200ms, ease-refined
-```
+**Transition between screens:**
+- Current screen slides left; incoming from right
+- `translateX(-100%) to 0`, spring physics
+- Active progress dot expands (4pt to 20pt width), spring
 
-Each menu item: `font-size: 13px, font-weight: 700, letter-spacing: 0.06em`  
-Hover state: background `rgba(255,255,255,0.06)`, border-radius var(--r-md)  
+### 7.4 Screen 4 — Permission Requests
 
-### 6.7 Mobile Navigation
-
-On viewports < 768px:
-- The expanded pill is never shown on mobile — the ♠ button is the default and only state
-- Tapping the ♠ button opens a full-screen menu overlay (glass-prominent, fills viewport)
-- Menu overlay contains all navigation links (About, Apps, Suits, Writing, Developer, Founder, Portfolio)
-- Overlay entrance: Cinematic Reveal from bottom (translateY 100% → 0, scale 0.97 → 1)
-- Overlay exit: Exit Dissolve downward (translateY 0 → 8px, opacity 1 → 0)
-
----
-
-## 7. Homepage (/)
-
-### 7.1 Overview
-
-The homepage is a single-page scroll experience. All main sections have `id` anchors targeted by the navigation pill. There are no sub-page navigations from here — the homepage is the brand's primary statement.
-
-### 7.2 Section: Hero
-
-**Purpose:** Dual brand + vision entrance. "Here's who we are. Here's what we stand for."
-
-**Layout:** Full viewport height (100svh). Content centered both axes.
-
-**Animation sequence (on page load):**
-```
-0ms    — Page background fades in (--c-950, 400ms)
-300ms  — ♠ mark appears (opacity 0→1, scale 0.92→1, 900ms, ease-expo)
-700ms  — "THE SPADES COMPANY" wordmark fades up (Fade Lift, 900ms, ease-expo)
-1200ms — Vision line fades up (Fade Lift, 800ms, ease-expo)
-1600ms — Navigation pill fades in (opacity 0→1, 400ms, ease-expo)
-1800ms — Scroll indicator appears (subtle, opacity 0→0.4, 600ms)
-```
-
-**Visual structure:**
-```
-[atmospheric background orb — slow drift]
-
-          ♠
-
-    THE SPADES COMPANY
-
-  Software with a standard.
-
-         ↓ (scroll indicator — very subtle, --c-700)
-```
-
-- ♠ mark: Display size (52px), `color: --c-white`
-- Wordmark: H1 (36px), Bold, tracking -0.03em
-- Vision line: Title (17px), Regular, `color: --c-400`
-- Vision line is **not** a tagline — it changes per product launch, but starts here
-
-**Scroll behavior:** As user scrolls past hero, the ♠ mark and wordmark have a subtle parallax — they move at 0.6× the scroll speed, creating depth without being distracting.
-
-### 7.3 Section: The Work (#apps)
-
-**Purpose:** Showcase the flagship app(s) with enough depth to generate desire.
-
-**Layout:** Full-width, generous vertical padding (--sp-24 top and bottom).
-
-**Structure:**
-```
-SECTION LABEL (uppercase, --c-600, letter-spacing wide)
-"The Work."
-
-[Featured App Card — large, cinematic]
-  ↓
-[Secondary App Cards — smaller grid, if >1 app exists]
-  ↓
-[→ See all apps] (ghost link, right-aligned)
-```
-
-**Featured App Card:**
-- Full width (or 80% centered with margin auto)
-- Background: Glass Standard + strong shadow (--sh-xl)
-- Border-radius: --r-2xl
-- Left side: App name (H1), tagline (Body), platform badges, CTA button
-- Right side: App mockup/screenshot (masked with gradient fade at edges)
-- Hover: card lifts (translateY -8px, --dur-film, ease-expo), shadow deepens
-
-**No apps yet:** A single placeholder card with text:  
-> "The first app is coming."  
-With a subtle pulsing animation on the ♠ mark inside the card.
-
-### 7.4 Section: Suits (#suits)
-
-**Purpose:** Present the subscription model with clarity and desire, not a pricing table.
-
-**Layout:** Full-width, dark panel (--c-900 background to create distinction from adjacent sections).
-
-**Structure:**
-```
-SECTION LABEL
-"One subscription."
-
-Suits — [price]/month
-Everything we make. All of it.
-
-[✓] [App 1 name]
-[✓] [App 2 name]
-[✓] Every future app
-
-[Get Suits — primary button]
-
-Below: "Individual apps available separately."
-(12px, --c-600 — de-emphasized but present)
-```
-
-**Tone:** No feature comparison table. No tiers (unless multiple tiers are added later). The simplicity of "everything, one price" is the message. The list of apps confirms the value — if there are 4 apps, 4 checkmarks. If there are 1, it plants anticipation for the rest.
-
-### 7.5 Section: Writing (#writing)
-
-**Purpose:** Surface recent blog content, signal that this is a brand that publishes.
-
-**Layout:** Clean, list-based. No images (consistent with the technical/editorial voice).
-
-**Structure:**
-```
-SECTION LABEL
-"Writing."
-
-[Post Title]                  [Date]
-One line of preview text...
-
-[Post Title]                  [Date]  
-One line of preview text...
-
-[Post Title]                  [Date]
-One line of preview text...
-
-[→ All writing]
-```
-
-- 3 most recent posts
-- Title: Title size (17px), Bold
-- Preview: Caption (12px), --c-400
-- Date: Label (10px), --c-600, right-aligned
-- Each row is a full-width link with a hover state: subtle bottom border appears (1px, --c-700)
-
-### 7.6 Footer
-
-Minimal. The footer closes the page, it doesn't try to reopen it.
-
-```
-[Left]                           [Right]
-♠ The Spades Company             © 2026
-thespades.co                     Terms · Privacy
-```
-
-- `font-size: 11px, --c-700`
-- `border-top: 1px solid --c-850`
-- `padding: --sp-12 0 --sp-8`
-- No social links in footer unless explicitly added — they're not part of the brand statement
-
----
-
-## 8. Apps Listing Page (/apps)
-
-**Purpose:** Present all Spades Company apps with enough information to generate interest, and surface the Suits subscription as the natural default.
-
-**Hero:**
-```
-"The Apps."
-[subtitle: "Built for people who care about what they make."]
-```
+Permissions are requested one at a time. Never batch multiple permissions onto one screen.
 
 **Layout:**
-- Suits CTA banner at top (Glass Standard, full width, rounded)
-  > "Get everything. One subscription. — Suits — [Get Started →]"
-- Grid of app cards below
-- Grid: 2 columns on desktop, 1 column on mobile
-- Card structure: app icon (monochrome), name, one-line description, platform tags, [View →]
+```
+[SF Symbol representing the permission — 52pt, --c-white]
+[Permission name — H2]
+[Why this is needed — Body, --c-400, specific and honest]
+[Allow Access ->] — primary button (triggers system dialog)
+[Not now] — ghost button below primary
+```
 
-**Empty state / pre-launch:**
-- Single card, "Coming soon" treatment
-- Suits banner still present — subscribing before launch is valid
+**Copy rules:**
+- Name the specific feature that requires this permission
+- Never use filler like "to give you the best experience"
+- Be direct: state what the permission enables and what is never accessed without it
+
+**Post-request handling:**
+
+| User choice | Response |
+|---|---|
+| Granted | Continue to next screen |
+| Denied | Calm explanation + "Open Settings" option — no guilt |
+| "Not now" | Skip — grantable later from in-app Settings |
+
+### 7.5 Screen 5 — Paywall
+
+See §8 for the full paywall specification. In onboarding context, the paywall is dismissible via "Maybe later" — this option is de-emphasized but always present.
 
 ---
 
-## 9. App Detail Page (/apps/[slug])
+## 8. Subscription & Paywall UI
 
-**Purpose:** Comprehensive showcase of a single app. Convert interest into download or subscription.
+Suits subscriptions are managed via RevenueCat. All Spades Company apps share a single subscription group.
 
-### Structure
+### 8.1 When the Paywall Appears
 
-**Hero (full viewport):**
-- App name: Display size
-- App tagline: H3, --c-400
-- Platform badges (iOS / Web)
-- Primary CTA: "Download" or "Try Free"
-- Secondary CTA: "Get via Suits ↗"
-- Large app mockup (right-aligned on desktop, below text on mobile)
+- End of onboarding (Screen 5)
+- When a locked feature is accessed while unsubscribed
+- From Settings -> Subscription
 
-**Feature Sections:**
-Each major feature gets its own full-height panel:
+**Presentation:** Full-screen modal (`.fullScreenCover`). Background: `--c-950` with atmospheric orb. Always dismissible; during onboarding, "Maybe later" is the escape — not an X button.
+
+### 8.2 Paywall Layout
+
 ```
-[Feature Name — Label size, uppercase]
-[Feature headline — H2]
-[Feature description — Body, max-width: 48ch]
-         [Mockup / visual — opposite side]
+[Top — ~30% of screen]
+  ♠
+  [App name] via Suits
+  "Everything we make. One subscription."
+
+[Middle — ~40% of screen]
+  Feature list:
+    [checkmark]  [This app] — full access
+    [checkmark]  All future Spades Company apps
+    [checkmark]  Priority processing
+    [checkmark]  [One product-specific premium differentiator]
+
+[Bottom — ~30% of screen]
+  [$X.XX / month]       [$XX.XX / year — save X%]
+  [Monthly pill]        [Annual pill — highlighted by default]
+
+  [Start Free Trial ->]   <- if trial offered
+   OR
+  [Subscribe ->]          <- if no trial
+
+  [Restore Purchases]   ghost, 11pt, --c-500
+  [Terms . Privacy]     ghost, 10pt, --c-600
 ```
 
-Features alternate: text left / visual right, then text right / visual left.
+### 8.3 Pricing Display Rules
 
-**How It Works:**
-Step-by-step section for technically complex features (e.g., for the audio cleaning app: Record → Upload → Clean → Fine-tune → Export).
+- Price shown plainly — no strikethroughs, no "valued at $XXX"
+- Annual plan highlighted by default
+- Trial copy: state duration and renewal terms. "7-day free trial, then $9.99/month."
+- No asterisks. No fine print that contradicts the headline.
 
-**Pricing/CTA Closeout:**
-- Standalone pricing card (if individual purchase available)
-- Suits upsell below it
-- Final tagline line
+### 8.4 Post-Subscribe
+
+```
+Confirmation screen:
+  [checkmark] — spring entrance, scale 0 to 1, 400ms
+  "You're in."
+  [Suits is active. Enjoy everything.]
+  [Start Using [App] ->]
+```
+
+Transition: brief full-screen white flash (50ms) then fade to app. This is the single moment of high contrast in the entire onboarding flow. It is used nowhere else.
+
+### 8.5 Subscription Management
+
+Accessible from: Settings -> Subscription
+
+- Current plan (monthly or annual)
+- Next billing date
+- [Manage in App Store ->]
+- [Restore Purchases]
 
 ---
 
-## 10. Founder / Portfolio Page (/founder)
+## 9. AI Processing States
 
-### Dual Audience
+Every Spades Company product calls an AI model. Latency is real. This section defines how that latency is handled across all apps — the specific visual representation adapts per product, but the structure is constant.
 
-This page serves two audiences simultaneously:
-1. **Visitors** — Curious about the person behind the brand
-2. **University admissions reviewers** — Evaluating the applicant's technical depth and initiative
+### 9.1 The Three Phases
 
-The design **never** acknowledges this dual purpose. It reads as a natural personal statement. Credentials emerge from context, not from a list.
+```
+Phase 1: Upload      — user data leaves the device
+Phase 2: Processing  — model runs server-side
+Phase 3: Return      — result arrives back on device
+```
 
-### Structure
+The user always knows which phase is active. Never combine phases visually or skip indicating one.
 
-**Opening:**
-- Name, one-line role
-- No headshot (consistent with brand's preference for work-over-person aesthetic — unless explicitly decided otherwise)
-- One paragraph in the brand voice — personal, specific, not a bio
+### 9.2 Phase 1 — Upload
 
-**The Work:**
-- Apps built (same cards as /apps, but framed as "things I've built")
-- Technical tools and stack mentioned naturally, not listed
+```
+Visual:
+  The app's primary data representation shown with a slow
+  directional animation suggesting outward movement.
+  The motion implies "sending," not "waiting."
+  The specific form — gradient sweep, opacity wave, particle
+  motion — is defined per-product in its specification (§C).
 
-**Background:**
-- Education, presented as context not credential
-- Written in first person, editorially
+Progress: Determinate — actual upload percentage
+  Fill:          --c-white at 60% opacity
+  Track:         --c-800
+  Border-radius: --r-pill
 
-**What I'm Building Toward:**
-- Forward-looking section
-- The ML roadmap, the vision for the company
-- Most compelling for admissions reviewers
+Label:    "Uploading..."   (Label, uppercase, --c-500)
+          [File info] . [Estimated time remaining]  (Caption, --c-600)
 
-**Closing line:**
-- One sentence. No call to action.
+Cancel:   Always available. Ghost button. "Cancel" — 12pt, --c-600.
+```
 
-### Tone on this page
-More human than the rest of the site. The brand voice applies, but first-person is used. Specificity over abstraction — concrete projects, real results, named skills.
+### 9.3 Phase 2 — Processing
+
+No determinate progress — model runtime is variable.
+
+```
+Visual:
+  The ♠ mark, slow pulse.
+  opacity: 0.4 to 1.0 to 0.4  (2.5s, ease-in-out, infinite)
+  scale:   0.97 to 1.0 to 0.97 (same timing, paired)
+
+Primary label:
+  "[Active verb for what the model is doing]."
+  Defined per-product in its specification (§M).
+  Body size, --c-400.
+
+Sub-label (appears after 10 seconds):
+  A single calm line in brand voice.  (Caption, --c-600)
+  Fades in: opacity 0 to 1, 600ms, ease-expo.
+  Tone: understated. Signals work, not apology.
+
+Time estimate:
+  Shown after first API timing response.
+  "About [N] seconds remaining."  (Caption, --c-500)
+
+Cancel: Available throughout. No guilt copy.
+```
+
+**What not to show during processing:**
+- Fake or stalled progress percentages
+- A generic `UIActivityIndicatorView` — the pulsing ♠ is the Spades indicator
+- Enthusiastic or performative copy
+- Any animation that looks like the app is struggling
+
+### 9.4 Phase 3 — Return
+
+```
+Processing state:   Exit Dissolve (opacity 1 to 0, 300ms, ease-refined)
+Result view:        Cinematic Reveal (opacity 0 to 1, scale 0.96 to 1, 900ms, ease-expo)
+Haptic on arrival:  .notificationOccurred(.success)
+```
+
+### 9.5 Error States
+
+| Error | Display |
+|---|---|
+| Upload failed (network) | Inline error card, retry button, input preserved |
+| Model error | Same — never expose internal model errors to the user |
+| Timeout | "Taking longer than expected. We'll notify you when it's ready." + background option |
+| Oversized input | Validated before upload — shown pre-attempt, not as a post-failure error |
+
+**Error copy rules:**
+- Never show error codes or stack traces
+- Never say "something went wrong" without a next step
+- Specific over vague: describe what failed, not just that it did
+
+### 9.6 Background Processing
+
+For tasks too long to wait for in the foreground:
+- Offer a completion notification — request permission in context, not during onboarding
+- Dynamic Island shows the active phase (§12)
+- Notification copy on completion: "[App name]: [Output description] is ready." — direct, no preamble
 
 ---
 
-## 11. Blog (/blog)
+## 10. Component Library — Apps
 
-### Listing Page
+### 10.1 Primary Button (iOS)
 
-**Structure:**
+```swift
+background:    Color(hex: "#FFFFFF")
+foreground:    Color(hex: "#000000")
+font:          Space Mono, Bold, 12pt
+letterSpacing: 0.08em
+textCase:      .uppercase
+cornerRadius:  .capsule
+padding:       horizontal 24pt, vertical 14pt
+minHeight:     52pt
+
+// Press state
+scaleEffect: 0.97 while pressed
+animation:   .spring(response: 0.3, dampingFraction: 0.7)
 ```
-"Writing."
-[Subtitle if any]
 
-[Post Title]                              [Date]
-[Category tag — Label size, uppercase]    [Read time]
-One sentence preview.
+### 10.2 Secondary Button (iOS)
 
-[divider — 1px, --c-850]
-
-[Next post...]
+```swift
+background:    Color.clear
+foreground:    Color(hex: "#FFFFFF")
+border:        1pt, Color(hex: "#777777")
+// All other properties identical to Primary
 ```
 
-- No pagination for now — all posts, newest first
-- No tag filtering until there are > 10 posts
-- No images in listing
+### 10.3 Ghost Button (iOS)
 
-### Post Page
-
-**Structure:**
-- Title: H1
-- Metadata: Date · Read time · Category (all Label size, --c-600)
-- `border-bottom: 1px solid --c-800` below metadata
-- Body: 14px Regular, max-width 680px, centered
-- Code blocks: Glass Subtle background, `--r-md` border-radius, full-width
-- No author block (the brand is the author)
-- No comments section
-- "← Back to writing" link at bottom
-
-**Code block style:**
+```swift
+background:    Color.clear
+foreground:    Color(hex: "#777777")
+border:        1pt, Color(hex: "#333333")
 ```
-background: var(--g-subtle-bg)
-border: 1px solid var(--g-subtle-border)
-border-radius: var(--r-md)
-padding: var(--sp-4) var(--sp-5)
-font-size: 13px (Space Mono — already the site font, blends naturally)
-color: --c-200
+
+### 10.4 Glass Card (iOS)
+
+```swift
+background:    .ultraThinMaterial
+               // fallback: Color(hex: "#0E0E0E").opacity(0.9)
+border:        1pt, Color.white.opacity(0.10)
+cornerRadius:  32pt
+shadow:        Color.black.opacity(0.7), radius: 20, y: 8
+
+// Press state
+scaleEffect: 0.98 on press, spring settle to 1.0
+```
+
+### 10.5 Text Field (iOS)
+
+```swift
+background:       Color.white.opacity(0.025)
+border:           1pt, Color.white.opacity(0.055)
+cornerRadius:     16pt
+padding:          12pt horizontal, 14pt vertical
+font:             Space Mono, Regular, 14pt
+textColor:        Color(hex: "#FFFFFF")
+placeholderColor: Color(hex: "#555555")
+
+// Focus state
+border:     1pt, Color.white.opacity(0.22)
+background: Color.white.opacity(0.055)
+```
+
+### 10.6 Section Header (iOS Lists)
+
+```swift
+font:          Space Mono, Bold, 10pt
+textCase:      .uppercase
+letterSpacing: 0.18em
+color:         Color(hex: "#555555")
+padding:       top 32pt, bottom 8pt, horizontal 16pt
+background:    .clear
+```
+
+### 10.7 Bottom Sheet (iOS)
+
+Used for: output options, settings panels, contextual actions.
+
+```swift
+presentationDetents:       [.medium, .large]
+presentationDragIndicator: .visible
+  // Custom indicator: 4pt x 36pt, --c-600, cornerRadius 2pt
+presentationBackground:    .ultraThinMaterial
+  // Fallback: Color(hex: "#111111")
+cornerRadius (top corners): 32pt
+Content padding:            --sp-6 horizontal, --sp-4 top
+```
+
+### 10.8 Toast / In-App Banner
+
+```
+Position:     top of screen, below navigation header
+Style:        Glass Prominent, --r-xl, --sh-lg
+Width:        screen width minus 32pt (16pt each side)
+Height:       52pt minimum + content
+
+Left:         SF Symbol, 18pt, --c-white
+Center:       title (13pt, Bold) + optional subtitle (11pt, --c-400)
+Right:        optional dismiss button
+
+Entrance:     slide down from above, spring
+Exit:         slide back up, --dur-fast, ease-refined
+Auto-dismiss: 3s success / 6s error / never for warnings
+```
+
+### 10.9 Primary Data Visualization
+
+Every product has a primary visual representation of the data it works with. The specific form — waveform, graph, sensor readout, image canvas, map, or otherwise — is defined per-product in its specification. The following rules apply to all implementations:
+
+```
+Container:
+  background:     --c-900
+  border-radius:  --r-xl
+  overflow:       hidden
+
+Primary data elements:
+  color:           --c-white at 80% opacity
+  active/selected: --c-white at 100% opacity
+
+Secondary or uncertain regions:
+  color: --c-400
+  Use for: model-flagged uncertainty, inactive ranges,
+           secondary data channels, background context
+
+Selected region overlay:
+  background:     --c-white at 8% opacity
+  border-radius:  --r-sm
+
+Interactions (where applicable):
+  Pinch to zoom
+  Drag to select a region
+  Double-tap to reset zoom / fit to container
+```
+
+The geometry, update frequency, axis logic, real-time behavior, and Phase 1 upload animation are defined per-product.
+
+---
+
+## 11. Haptic Feedback — iOS
+
+Haptics confirm significant state changes. Used sparingly — not on every tap.
+
+| Event | Haptic Type | UIKit Class |
+|---|---|---|
+| Core workflow begins | `.impactOccurred(intensity: 0.8)` | `UIImpactFeedbackGenerator(.medium)` |
+| Core workflow ends or concludes | `.impactOccurred(intensity: 0.6)` | `UIImpactFeedbackGenerator(.light)` |
+| AI processing complete — success | `.notificationOccurred(.success)` | `UINotificationFeedbackGenerator` |
+| AI processing complete — error | `.notificationOccurred(.error)` | `UINotificationFeedbackGenerator` |
+| Subscription confirmed | `.notificationOccurred(.success)` | `UINotificationFeedbackGenerator` |
+| Selection change in a data visualization | `.selectionChanged()` | `UISelectionFeedbackGenerator` |
+| Destructive action confirmed | `.impactOccurred(intensity: 1.0)` | `UIImpactFeedbackGenerator(.heavy)` |
+| Primary button tap (primary only) | `.impactOccurred(intensity: 0.4)` | `UIImpactFeedbackGenerator(.light)` |
+
+**Never add haptics to:**
+- Navigation transitions
+- Scrolling
+- Every tap indiscriminately
+- Toggle switches (system provides these)
+- Passive state changes the user did not initiate
+
+---
+
+## 12. Dynamic Island Integration
+
+Supported on: iPhone 14 Pro and later.
+Purpose: Surface AI processing status when the app is backgrounded.
+
+### 12.1 Compact State
+
+```
+Leading:  ♠ mark, 12pt, --c-white
+Trailing: Subtle activity indicator
+          3 dots, opacity cycling 0.3 to 1.0 to 0.3, 1.2s infinite
+```
+
+### 12.2 Expanded State
+
+```
+Header:   [App name]  .  [Active phase label]
+Body:     A simplified view of the current processing phase.
+          Specific content defined per-product in specification (§L).
+Footer:   "Tap to return"  (Caption, --c-400)
+```
+
+### 12.3 Completion State
+
+```
+Island expands briefly:
+  Checkmark pulses in: scale 0 to 1, spring, 400ms
+  Text: "[App name]: Ready."
+  Auto-collapses after 2 seconds
+
+Paired with: .notificationOccurred(.success) haptic
+```
+
+Implementation: `ActivityKit` Live Activities API.
+
+---
+
+## 13. Widgets & Extensions
+
+### 13.1 Home Screen Widget — Small (2x2)
+
+```
+Background: --c-950
+Content:
+  ♠ mark          16pt, top-left
+  App name        Label, uppercase, --c-500
+  Primary stat    H2, --c-white
+```
+
+The primary stat is the single most useful at-a-glance metric for this product. It must be comprehensible in under 1 second without opening the app. Defined per-product in its specification (§K).
+
+### 13.2 Home Screen Widget — Medium (4x2)
+
+```
+Left half:   Small widget content
+Right half:  Secondary context — recent items, next action,
+             or a supporting stat. Defined per-product.
+```
+
+### 13.3 Lock Screen Widget
+
+```
+Style:   Circular or rectangular
+Content: ♠ mark + one number or short status string
+Color:   System-adaptive — must read on both light and dark lock screens
+         Apply .widgetAccentable to the ♠ mark
+```
+
+### 13.4 Control Center Extension (iOS 18+)
+
+A quick-launch button to initiate the app's primary action without opening the app fully. Whether to implement this is decided per-product based on how often the primary action is triggered contextually.
+
+### 13.5 watchOS Complications
+
+For apps with watchOS companions:
+
+```
+Graphic Circular:  ♠ mark fills the complication
+Graphic Corner:    ♠ mark + short stat
+Modular Small:     ♠ mark + one number
+Modular Large:     ♠ mark + primary stat + one supporting label
 ```
 
 ---
 
-## 12. Developer Page (/developer)
+## 14. App Icons
 
-**Purpose:** Public research, API documentation (future), and credibility signal for the developer community.
+### 14.1 The System
 
-### Phase 1 (current — pre-API)
+Every Spades Company app icon follows the same construction:
 
-**Structure:**
+- **Background:** `#000000` — true black, not near-black, for icon rendering context
+- **Primary element:** ♠ mark, white, centered or slightly above center
+- **Supporting element:** A secondary mark specific to the app's domain
+- **No gradients** on either the ♠ or supporting element
+- **No rounded corners from the designer** — iOS applies them system-wide
+
+### 14.2 Supporting Element Rules
+
+The supporting element communicates the product's domain without competing with the ♠ as the primary read.
+
+- Legible as texture at 60x60pt; distinct and clear at 1024x1024
+- White or near-white — no gray tones that compete with the ♠
+- Occupies the lower third of the canvas, or wraps lightly around the ♠
+- Geometric or symbolic in form — not illustrative
+- Does not repeat or echo the ♠ shape
+
+The specific supporting element is defined per-product in its specification (§J).
+
+### 14.3 Required Variants
+
 ```
-"Developer."
+1024x1024   App Store
+180x180     iPhone @3x
+120x120     iPhone @2x
+167x167     iPad Pro @2x
+152x152     iPad @2x
 
-"The API is coming."
-[One paragraph on what the API will expose — brief, specific]
-
-Research & Open Work
-[Links to any published research, GitHub repos, public writing]
-
-Stay Updated
-[Email capture — simple, minimal]
+All exported from a master 1024x1024 SVG source.
 ```
 
-### Phase 2 (when API exists)
+### 14.4 Alternate Icons (Suits Reward)
 
-Full API documentation:
-- Authentication
-- Endpoints
-- Rate limits
-- Code examples (copy-able)
-- SDKs
+Suits subscribers unlock alternate icon variants, surfaced in Settings -> App Icon. All alternates follow the same construction rules. Standard set offered by every app:
 
-The developer page adopts a slightly more technical tone — exact language, numbers, specifications — while maintaining Space Mono's inherent technical character.
+- **Default** — black background, white ♠
+- **Inverted** — white background, black ♠
+- Additional variants defined per-product
 
 ---
 
-## 13. Component Library
+## 15. Per-Product Specification Guide
 
-### Buttons
+Each Spades Company product has its own specification document or appendix section. That document does not redefine the shared system — it layers product-specific UX flows and decisions on top of it.
 
-Four variants. All use `font-family: var(--font), font-size: 11px, font-weight: 700, letter-spacing: 0.10em, text-transform: uppercase, border-radius: --r-pill`.
+This section defines what a complete product specification must cover.
 
-| Variant | Background | Text | Border | Hover |
-|---|---|---|---|---|
-| Primary | `--c-white` | `--c-black` | none | bg `--c-100`, translateY(-2px), --sh-md |
-| Secondary | transparent | `--c-white` | 1px `--c-500` | border `--c-white`, translateY(-2px) |
-| Glass | Glass Standard | `--c-300` | Glass Standard border | Glass Prominent bg, text `--c-white`, translateY(-2px) |
-| Ghost | transparent | `--c-500` | 1px `--c-800` | text `--c-300`, border `--c-600` |
-
-All hover transitions: `--dur-std, --ease-expo`.  
-Destructive actions: Ghost variant with red-tinted border on hover only — `rgba(255, 60, 60, 0.3)`.
-
-### Cards
-
-Standard card template:
-```
-background: var(--g-std-bg)
-border: 1px solid var(--g-std-border)
-border-radius: var(--r-2xl)
-backdrop-filter: blur(18px)
-box-shadow: var(--sh-lg)
-
-hover:
-  transform: translateY(-8px)
-  box-shadow: var(--sh-xl)
-  transition: --dur-film, --ease-expo
-```
-
-### Text Input
-
-```
-background: var(--g-subtle-bg)
-border: 1px solid var(--g-subtle-border)
-border-radius: var(--r-lg)
-padding: 12px 16px
-font-family: var(--font)
-font-size: 13px
-color: var(--c-white)
-transition: all --dur-std --ease-expo
-
-placeholder: color var(--c-600)
-
-:focus
-  border-color: rgba(255,255,255,0.22)
-  background: var(--g-std-bg)
-  box-shadow: 0 0 0 3px rgba(255,255,255,0.04)
-  outline: none
-```
-
-### Modal / Sheet
-
-```
-Backdrop: rgba(0,0,0,0.7), backdrop-filter: blur(8px)
-Modal container: Glass Prominent, --r-2xl, --sh-xl
-Max-width: 560px (desktop), full-width minus 32px margin (mobile)
-Padding: --sp-8
-
-Entrance:
-  opacity: 0 → 1
-  scale: 0.95 → 1
-  duration: 400ms, --ease-expo
-
-Exit:
-  opacity: 1 → 0
-  scale: 1 → 0.97
-  duration: 250ms, --ease-refined
-```
-
-### Divider
-
-```
-height: 1px
-background: var(--c-850)
-border: none
-```
-
-For section breaks with more presence:
-```
-background: linear-gradient(to right, transparent, var(--c-800), transparent)
-```
-
-### Tag / Badge
-
-```
-font-size: 10px, font-weight: 700, letter-spacing: 0.12em, text-transform: uppercase
-padding: 3px 10px
-border-radius: var(--r-pill)
-border: 1px solid var(--g-std-border)
-color: var(--c-500)
-background: var(--g-subtle-bg)
-```
-
-Platform badges (iOS / Web / macOS) use this exact style.
+### 15.1 Required Sections
 
 ---
 
-## 14. Responsive Behavior
+**§A — Product Overview**
 
-### Breakpoints
-
-```
-Mobile:  < 768px
-Tablet:  768px – 1024px
-Desktop: > 1024px
-```
-
-### Key Responsive Rules
-
-**Typography:**
-- Display text scales down: 52px → 36px on mobile (using `clamp(36px, 7vw, 52px)`)
-- Body, Caption, Label sizes remain fixed — they're already at minimum
-
-**Navigation:**
-- Desktop: Floating pill (State 1 default)
-- Mobile: ♠ button only (State 2 always), tap opens full-screen overlay
-
-**Homepage Sections:**
-- Feature sections: side-by-side on desktop → stacked (text above, visual below) on mobile
-- App cards: 2-column grid → single column on mobile
-
-**Glass effects:**
-- Full glass on desktop
-- Reduced blur on mobile: 12px instead of 18px (performance consideration on low-end devices)
-- `@supports not (backdrop-filter: blur())` fallback: opaque `--c-900` background
-
-**Touch targets:**
-- Minimum 44px × 44px on all interactive elements (Apple HIG standard)
-- Navigation pill links get increased padding on touch devices
+- What manual, expensive, or broken workflow does this app replace?
+- What is the AI model doing, specifically?
+- V1 vs V2 model strategy: which managed service ships first, what self-hosted infrastructure replaces it at scale (see §15.2)
+- Which platforms: iOS / watchOS / web — and which ships first
 
 ---
 
-## 15. Accessibility Standards
+**§B — Core User Flow**
 
-- **Contrast:** All text passes WCAG AA minimum (4.5:1 for normal text, 3:1 for large text)
-  - Body text (--c-200 on --c-950): passes AA
-  - Secondary text (--c-400 on --c-950): checked per usage — increase to --c-300 where needed
-- **Focus states:** All interactive elements have a visible focus ring: `outline: 2px solid rgba(255,255,255,0.5), outline-offset: 3px`
-- **Reduced motion:** All animations wrapped in `@media (prefers-reduced-motion: reduce)` — durations set to 0ms or 1ms, transforms removed
-- **Semantic HTML:** `<nav>`, `<main>`, `<section>`, `<article>`, `<header>`, `<footer>` used correctly
-- **ARIA:** Modal overlays use `role="dialog"`, `aria-modal="true"`. Navigation uses `aria-label`. Hidden decorative elements use `aria-hidden="true"`.
+A linear diagram of the primary sequence from open to delivered value. Start with the happy path only — no branches, no error cases yet.
+
+```
+Minimal structure:
+Open -> [Primary Action] -> [Input State] -> [Process] -> [Result] -> [Output]
+```
 
 ---
 
-## 16. Performance Targets
+**§C — Primary Data Visualization**
+
+Define the app's primary visualization per §10.9 rules:
+- What does it represent?
+- What form does it take (geometry, orientation, dimensions)?
+- Update rate when live vs static?
+- What do primary, secondary/uncertain, and selected states look like?
+- Which gestures does it support?
+- Phase 1 Upload animation: how does "sending" appear on this visualization?
+
+---
+
+**§D — Main Screen**
+
+The idle or default state of the app:
+- Navigation header: left, center, right content
+- Primary action element: form, idle state, active state
+- Supporting context: recent items, current status, or nothing
+- Empty state: copy and visual treatment
+
+---
+
+**§E — Primary Interaction States**
+
+For each state in the core workflow:
+- What triggers this state?
+- What does the screen show?
+- Which animations play?
+- What are the user's available next actions?
+
+States typically include: idle, active (performing the action), uploading (Phase 1), processing (Phase 2 — inherits §9.3 with product-specific label), result, and error.
+
+---
+
+**§F — Result State**
+
+How the AI output is presented after processing:
+- Layout of the result screen
+- How is the AI's output visible relative to the original input?
+- Is there a before/after comparison? What interaction surfaces it?
+- Is there a confidence or quality indicator? How is it shown using §10.9 color rules?
+- Are refinement options available (re-processing a sub-region, adjusting a parameter)?
+
+---
+
+**§G — Output / Export**
+
+How the user extracts value from the app:
+- Available output formats
+- Export sheet structure (bottom sheet, §10.7 rules)
+- Sharing options (Files app, AirDrop, Share Sheet)
+- Post-export confirmation state
+
+---
+
+**§H — Settings**
+
+Product-specific settings entries added above the following base, which every app includes:
+
+```
+[Product-specific settings — above this line]
+
+SUBSCRIPTION
+  Suits — [Active / Get Suits]
+  Manage in App Store
+  Restore Purchases
+
+ABOUT
+  Version [X.X.X]
+  Privacy Policy
+  Terms of Service
+
+DEBUG (TestFlight builds only)
+  Force error states
+  Clear all stored data
+```
+
+---
+
+**§I — Empty States**
+
+For each screen or context that can appear without data:
+- Copy in brand voice (see `DESIGN.md §4`)
+- Visual: ♠ mark at --c-800, centered, is the default unless something more specific is warranted
+- Any offered action
+
+Copy rule: specific and direct — never apologetic. Name the context, offer a path. Never "No items found."
+
+---
+
+**§J — App Icon Supporting Element**
+
+Define the secondary icon element per §14.2 rules. Describe the geometry, its position relative to the ♠, and what it communicates.
+
+---
+
+**§K — Widget Primary Stat**
+
+Define what the Small (2x2) widget displays as its primary stat (§13.1). Must communicate value without opening the app.
+
+---
+
+**§L — Dynamic Island Body**
+
+Define the content shown in the expanded Dynamic Island state during background processing (§12.2).
+
+---
+
+**§M — Processing State Labels**
+
+Define per-phase copy used in §9:
+- Phase 2 primary label: "[Active verb] your [subject]." — e.g., "Processing your data."
+- Phase 2 sub-label: A calm brand-voice line for long waits
+- Background notification: "[App name]: [Output description] is ready."
+
+---
+
+### 15.2 V1 / V2 Strategy Note
+
+All products follow the same two-phase model philosophy, documented explicitly in §A:
+
+- **V1:** Ship with a managed third-party API. Faster to market. Accept tradeoffs (cost at scale, limited output metadata).
+- **V2:** Migrate to self-hosted infrastructure when scale justifies it, or when the product requires richer model outputs — confidence maps, intermediate representations — to unlock advanced UX features.
+
+Features that depend on V2 outputs must be explicitly marked as V2 in the product spec and must not ship until the V2 model is in production.
+
+---
+
+## 16. Suits Subscription Scope
+
+### 16.1 Cross-App Entitlement
+
+Suits is a single subscription that unlocks all Spades Company products. Managed via RevenueCat with one subscription group shared across all apps on the same Apple Developer account.
+
+### 16.2 When a New Product Ships
+
+- Automatically included in the active Suits subscription
+- Existing subscribers get access on launch day — no separate action required
+- Paywall feature list (§8.2) is updated to include the new app before launch
+- Marketing website Suits section updates accordingly (see `DESIGN.md §7.4`)
+
+### 16.3 Individual App Purchases
+
+Per-product individual purchases may be offered where appropriate. If offered, they appear on the paywall below the Suits option, de-emphasized. Suits is always the primary offer.
+
+---
+
+## 17. Accessibility Standards
+
+### 17.1 VoiceOver (iOS)
+
+- All interactive elements have a defined `accessibilityLabel`
+- Decorative elements marked `.accessibilityHidden(true)`
+- Each app's primary data visualization has descriptive labels appropriate to its content — defined in §C of the product spec
+- Processing phase changes announced via `UIAccessibility.post(notification: .announcement, argument:)`
+- Custom gestures (selection, zoom) have `.accessibilityAction` alternatives defined
+
+### 17.2 Dynamic Type
+
+Space Mono scales at accessibility text sizes (§3.2). Every layout must be verified at the largest Dynamic Type setting before shipping.
+
+Layouts to verify per product:
+- Navigation header (title may truncate — acceptable; must not overflow)
+- Processing state copy (two lines maximum)
+- Paywall feature list (line wrapping must not break layout)
+- Settings list rows (icon and label alignment)
+
+### 17.3 Color Independence
+
+No information is conveyed by color alone. Where color signals state — in data visualizations, confidence overlays, or status indicators — it is paired with at least one of:
+- A shape or pattern difference
+- A visible label or annotation
+- A VoiceOver description
+
+### 17.4 Reduced Motion
+
+When `UIAccessibility.isReduceMotionEnabled`:
+- Idle pulse animations on primary action elements: removed entirely
+- Processing pulse animation (§9.3): opacity fade only, no scale change
+- All spring animations: replaced with simple opacity crossfades
+- Screen transitions: crossfade only — no slide, no scale
+
+### 17.5 Reduced Transparency
+
+When `UIAccessibility.isReduceTransparencyEnabled`:
+- All glass surfaces: replaced with opaque `--c-850`
+- `UIBlurEffect` materials: replaced with solid color fallbacks
+- Glass border opacity: increased to 0.25 for legibility
+
+---
+
+## 18. Performance Targets
+
+### iOS
 
 | Metric | Target |
 |---|---|
-| Lighthouse Performance | ≥ 90 |
-| LCP (Largest Contentful Paint) | < 2.5s |
-| CLS (Cumulative Layout Shift) | < 0.1 |
-| FID / INP | < 200ms |
-| First load JS bundle | < 150kb gzipped |
-| Space Mono font load | Preloaded via `<link rel="preload">` |
-| Images | WebP format, `next/image` with blur placeholder |
-| Glass effects | Only rendered when `backdrop-filter` is supported |
+| Cold launch to interactive | < 400ms |
+| Main thread blocking | Zero — all heavy work dispatched off main thread |
+| Memory footprint (idle) | < 50MB |
+| Memory footprint (active workflow) | < 150MB |
+| Primary data visualization render | < 8ms per frame at 60fps |
+| UI response after primary action tap | < 100ms — UI is immediate, network follows |
+| App download size | < 30MB |
+
+### watchOS
+
+| Metric | Target |
+|---|---|
+| App launch from complication | < 1s to interactive |
+| Background task execution | Completes within allocated system background time |
+
+### Web App
+
+| Metric | Target |
+|---|---|
+| LCP | < 2s |
+| INP | < 200ms |
+| CLS | < 0.05 — apps must not reflow after initial load |
+| First load JS bundle | < 120KB gzipped |
+
+### AI Processing (Infrastructure Guidance)
+
+These targets inform what the processing state UX (§9) must accommodate. Specific model latency and cost-per-call are documented per-product in §A.
+
+| Metric | Target |
+|---|---|
+| UI response after primary action tap | < 100ms visual — network follows |
+| Upload timeout before surfacing error | 30s |
+| Processing timeout before background + notify | 120s |
+| Result render after API response received | < 300ms |
 
 ---
 
-## 17. Assumptions & Open Questions
+## 19. Assumptions & Open Questions
 
 ### Confirmed
-- [x] Always dark — no light mode
-- [x] Space Mono only — no fallback typeface beyond monospace stack
-- [x] No accent color — ever
-- [x] Glass selective — overlays and modals only
-- [x] Animation tempo: slow and cinematic
-- [x] Copy voice: subtle confidence (Bentley/Apple)
-- [x] Navigation: floating pill with asymmetric collapse logic
-- [x] Homepage: brand + vision dual entrance
-- [x] Single-page scroll homepage with section anchors
 
-### Open — Requires Decision
+- [x] Always dark — no light mode in any product
+- [x] Space Mono throughout — bundled as a custom font resource in every app
+- [x] RevenueCat for cross-app subscription management
+- [x] ♠ mark as app icon primary element across all products
+- [x] Suits = one subscription group, all apps, one price
+- [x] Minimum iOS target: iOS 17 (Dynamic Island, latest SwiftUI APIs)
+- [x] Minimum watchOS target: watchOS 10
+- [x] Android is not in scope — iOS-first is a brand and resource decision
 
-| Question | Impact | Default Assumption |
+### Open — Requires Decision Per Product or Globally
+
+| Question | Impact | Notes |
 |---|---|---|
-| First app name | High — affects all product copy | [PLACEHOLDER: "Clarity"] |
-| Suits pricing | High — shapes /apps and /suits sections | $9.99/month assumed |
-| Portfolio vs Founder — same page? | Medium | Treated as same page (`/founder`) |
-| Custom 404 page | Low | Minimal: ♠ + "Wrong turn." + home link |
-| Email capture (for API waitlist) | Medium | Simple input, no third-party form embed |
-| App icon design | High for product pages | Not defined — separate process |
-| Does `/about` exist as a separate page, or only as a homepage section? | Medium | Homepage section only for now |
-| Social presence linked from site | Low | Not linked — brand is product-first |
+| Free tier or full paywall-on-open for all products? | High | §8 assumes paywall at end of onboarding — confirm as global default or document per-product exceptions |
+| Standard trial duration | Medium | Not yet set globally — 7 days assumed until decided |
+| On-device model (offline capability, V2+) | Medium | Not in scope for any V1 product — evaluate per product at V2 planning |
+| macOS Catalyst support | Low | Possible per product — not the default; must be explicitly scoped per app |
+| Cloud vs local data storage | High | Privacy, sync, and cost implications — decided per product in §A |
+| Collaboration or multi-user features | Low | All V1 products are single-user — multi-user is a V2 consideration |
 
 ---
 
-*This document is the single source of truth for all visual and UX decisions on thespades.co. Any implementation that contradicts a rule in this document requires a documented reason and a version update to this file.*
+*This document governs all shared design and UX decisions across The Spades Company product suite. For website and marketing design, see `DESIGN.md`. For product-specific flows, states, and interactions, see each product's individual specification. Any implementation that contradicts a rule here requires a written reason and a version update to this file.*
 
-*♠ The Spades Company — Design System v1.0*
+*The Spades Company — Product Design System v1.1*
