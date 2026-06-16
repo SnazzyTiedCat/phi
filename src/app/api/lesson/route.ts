@@ -113,14 +113,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  // 4) Normalise the source name. The URL may carry percent-encoded characters
-  //    (e.g. "my%20notes.pdf"). Next.js decodes searchParams before the server
-  //    component reads them, but a double-encoded URL or a client that sends the
-  //    raw encoded string could produce a mismatch between what is stored in the
-  //    chunks / lessons tables (plain filename) and what arrives here. Decoding
-  //    once is idempotent for already-decoded strings ("my notes.pdf" → same),
-  //    and fixes the mismatch when the string is still encoded.
-  const normalisedSource = decodeURIComponent(source.replace(/\+/g, " "));
+  // 4) Treat source_name as an opaque identity key. The lesson page / client
+  //    already receive a decoded filename from Next / URLSearchParams, and
+  //    uploads store the browser's raw `file.name`. Decoding again would mutate
+  //    valid filenames such as "chapter+notes.txt" or crash on "100%.txt".
+  const sourceKey = source;
 
   // 4b) Derive the cache key. Per-section lessons must NOT collide with the
   //     whole-document lesson (or with each other), so a section lesson is keyed
@@ -129,8 +126,8 @@ export async function POST(request: Request) {
   //     the source_name string. The dashboard reconstructs the exact same key to
   //     detect which sections are completed.
   const cacheSource = isSection
-    ? `${normalisedSource}_section_${sectionIndex}`
-    : normalisedSource;
+    ? `${sourceKey}_section_${sectionIndex}`
+    : sourceKey;
 
   // 4a) Cache check. If we've already generated a lesson for this user + source,
   //     return it immediately — no Anthropic call, no token spend.
@@ -240,7 +237,7 @@ export async function POST(request: Request) {
     // `.upsert` with `onConflict` handles the unique(user_id, source_name)
     // constraint — if two tabs race to generate the same lesson, the second
     // write just overwrites with an identical value.
-    // We store cacheSource (decoded, plus the _section_N suffix when scoped) so
+    // We store cacheSource (source key, plus the _section_N suffix when scoped) so
     // it always matches the cache lookup above.
     const { error: upsertError } = await supabase.from("lessons").upsert(
       { user_id: user.id, source_name: cacheSource, content: lesson },

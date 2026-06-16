@@ -45,17 +45,9 @@ export default async function AppLayout({
   // The sidebar shows on every authenticated page, so the shell fetches the
   // user's uploads here (once) and passes them to the client Sidebar. Same shape
   // as the dashboard: each upload is many `chunks` rows sharing a source_name, so
-  // we dedupe to one entry per name, newest-first. Older rows may store an
-  // URL-encoded name while chunks store the raw filename — normalise both sides
-  // so cross-table matching is reliable (decodeURIComponent throws on a lone "%",
-  // hence the try/catch fallback).
-  const normalise = (s: string) => {
-    try {
-      return decodeURIComponent(s);
-    } catch {
-      return s;
-    }
-  };
+  // we dedupe to one entry per exact source key, newest-first. `source_name` is
+  // an identity value, not display text — decoding it here would make valid
+  // filenames like "100%.txt" or "chapter+notes.txt" point at the wrong rows.
 
   const { data: chunkRows } = await supabase
     .from("chunks")
@@ -66,7 +58,7 @@ export default async function AppLayout({
   const seen = new Set<string>();
   const orderedNames: string[] = [];
   for (const row of chunkRows ?? []) {
-    const name = normalise(row.source_name);
+    const name = row.source_name;
     if (!seen.has(name)) {
       seen.add(name);
       orderedNames.push(name);
@@ -84,7 +76,7 @@ export default async function AppLayout({
   const sectionedNames = new Set<string>();
   const titleByName = new Map<string, string>();
   for (const row of sourceRows ?? []) {
-    const name = normalise(row.source_name);
+    const name = row.source_name;
     const sections = (row.sections ?? []) as unknown[];
     if (sections.length > 0) sectionedNames.add(name);
     if (typeof row.display_title === "string" && row.display_title.trim()) {

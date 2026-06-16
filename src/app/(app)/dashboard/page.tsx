@@ -71,21 +71,12 @@ export default async function DashboardPage() {
 
   const hasSources = sources.length > 0;
 
-  // Normalise source_names before comparing across tables. Older rows may have
-  // been written before the decodeURIComponent fix in the API routes, so some
-  // carry encoded names ("my%20notes.pdf") while chunks always store the raw
-  // filename ("my notes.pdf"). Decoding both sides makes lookups reliable.
-  // decodeURIComponent throws on malformed sequences (e.g. a lone "%") so we
-  // catch and fall back to the original string.
-  function normalise(s: string) {
-    try { return decodeURIComponent(s); } catch { return s; }
-  }
-
   // ── Fetch the section roadmap for each source ─────────────────────────────
   // `sources` rows are written by /api/upload when mapping succeeds. Not every
   // file has one: older uploads (pre-sectioning) and uploads where mapping was
   // skipped/failed have no row — those fall back to a flat card below. We key
-  // the map by the normalised filename so it matches the chunks-derived list.
+  // the map by the exact `source_name` because it is the database identity; the
+  // display label may change, but the routing/mutation key must not.
   const { data: sourceRows } = await supabase
     .from("sources")
     .select("source_name, sections, display_title")
@@ -96,7 +87,7 @@ export default async function DashboardPage() {
   // have one. Card headings fall back to the filename when absent.
   const titleBySource = new Map<string, string>();
   for (const row of sourceRows ?? []) {
-    const name = normalise(row.source_name);
+    const name = row.source_name;
     sectionsBySource.set(name, (row.sections ?? []) as Section[]);
     if (typeof row.display_title === "string" && row.display_title.trim()) {
       titleBySource.set(name, row.display_title.trim());
@@ -114,11 +105,8 @@ export default async function DashboardPage() {
     .eq("user_id", user?.id ?? "");
 
   const cachedSources = new Set(
-    (lessonRows ?? []).map((row: { source_name: string }) => normalise(row.source_name)),
+    (lessonRows ?? []).map((row: { source_name: string }) => row.source_name),
   );
-
-  // Normalise the sources array too, so every comparison is decoded-vs-decoded.
-  const normalisedSources = sources.map(normalise);
 
   // ── Time-of-day greeting (server fallback) ────────────────────────────────
   // The server clock is UTC on Vercel, so this value is only a first-paint
@@ -170,7 +158,7 @@ export default async function DashboardPage() {
            1 column on mobile, 2 on small screens, 3 on large — so cards stay a
            comfortable width instead of stretching edge-to-edge. */
         <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {normalisedSources.map((source) => {
+          {sources.map((source) => {
             const sections = sectionsBySource.get(source) ?? [];
             // Card heading: the renamed title when set, else the filename. The
             // URL still uses the raw `source` key — only the label changes.

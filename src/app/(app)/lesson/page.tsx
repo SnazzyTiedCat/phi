@@ -125,9 +125,14 @@ export default async function LessonPage(props: {
   const chunks = chunkRows.map((row) => row.content);
 
   // Hand off to the interactive client component. From here the browser takes
-  // over: it reads the API key from localStorage and requests the lesson.
+  // over: it reads the API key from localStorage and requests the lesson. The
+  // key is important because the app shell persists across navigation and the
+  // lesson URL often changes only in its query string (`?source` / `?section`).
+  // Without a per-lesson key, React can preserve the old client state and show
+  // the previous source's lesson under the new URL.
   return (
     <LessonView
+      key={`${source}:${effectiveSection ?? "all"}`}
       chunks={chunks}
       source={source}
       sectionIndex={effectiveSection}
