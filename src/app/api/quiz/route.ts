@@ -22,19 +22,24 @@ import { createClient } from "@/lib/supabase/server";
 // The Anthropic SDK targets Node, not Edge — same as the other routes.
 export const runtime = "nodejs";
 
-// One quiz question: the prompt, its answer options, and the 0-based index of
-// the correct one. This is the exact shape the client renders and the
-// `questions` jsonb column stores.
-type QuizQuestion = {
-  question: string;
-  options: string[];
-  correct: number;
-};
+// A quiz question is one of two shapes (discriminated by `type`):
+//   - multiple_choice: options + the 0-based index of the correct one.
+//   - short_answer:    a free-text question graded against a sample answer.
+// Legacy cached quizzes have no `type` field; we treat those as multiple_choice.
+// This is the exact shape the client renders and the `questions` jsonb column
+// stores.
+type QuizQuestion =
+  | { question: string; type: "multiple_choice"; options: string[]; correct: number }
+  | { question: string; type: "short_answer"; sample_answer: string };
 
 // The POST body. GET takes its source from the query string instead.
+// `apiKey` is optional: a cached quiz serves without a key (required only on a
+// real miss). `count` (3–10) and `types` come from the config step in the UI.
 type QuizRequest = {
   source: string;
-  apiKey: string;
+  apiKey?: string;
+  count?: number;
+  types?: string[];
 };
 
 // Model id as a one-line constant, same convention as the other routes. Sonnet
@@ -43,13 +48,40 @@ type QuizRequest = {
 // once per source.
 const MODEL = "claude-sonnet-4-6";
 
-// The exact generation prompt. The JSON-only instruction matters: we parse the
-// reply as data, not prose. `correct` is a 0-based index into `options`.
-const SYSTEM_PROMPT = `Generate exactly 5 multiple-choice questions from this material.
-Each question must have exactly 4 options and exactly one correct answer.
-Return ONLY a JSON array, no markdown, no explanation:
-[{"question": "...", "options": ["A", "B", "C", "D"], "correct": 0}]
-The "correct" field is the 0-based index (0-3) of the correct option.`;
+// The two question types the UI can request. Anything else is ignored.
+const QUESTION_TYPES = ["multiple_choice", "short_answer"] as const;
+
+// Build the generation prompt from the student's config. The JSON-only
+// instruction matters: we parse the reply as data, not prose. We only describe
+// the formats the student asked for, so a multiple-choice-only quiz never gets
+// short-answer questions and vice versa.
+function buildQuizPrompt(count: number, types: string[]): string {
+  const wantsMC = types.includes("multiple_choice");
+  const wantsSA = types.includes("short_answer");
+
+  const formats: string[] = [];
+  if (wantsMC) {
+    formats.push(
+      `- Multiple choice: {"question": "...", "type": "multiple_choice", "options": ["A","B","C","D"], "correct": 0} — exactly 4 options; "correct" is the 0-based index of the right one.`,
+    );
+  }
+  if (wantsSA) {
+    formats.push(
+      `- Short answer: {"question": "...", "type": "short_answer", "sample_answer": "a concise model answer"}`,
+    );
+  }
+
+  return `Generate exactly ${count} questions from this material.
+Return ONLY a JSON array, no markdown, no explanation. Each object uses one of these formats:
+${formats.join("\n")}${wantsMC && wantsSA ? "\nUse a mix of both question types." : ""}`;
+}
+
+// Clamp the requested count into the UI's 3–10 range, defaulting to 5 for
+// anything missing or out of bounds.
+function clampCount(n: unknown): number {
+  if (typeof n !== "number" || !Number.isFinite(n)) return 5;
+  return Math.min(10, Math.max(3, Math.round(n)));
+}
 
 /**
  * Pull a clean QuizQuestion[] out of the model's text reply.
@@ -59,9 +91,8 @@ The "correct" field is the 0-based index (0-3) of the correct option.`;
  *   1. strip a surrounding code fence if present,
  *   2. slice from the first "[" to the last "]" (drops any prose around it),
  *   3. JSON.parse, and
- *   4. keep only well-formed questions — a string question, an array of string
- *      options, and a `correct` index that's actually IN range for that array.
- * Anything malformed is dropped, so a single bad question can't crash the UI.
+ *   4. normalise each entry to one of the two valid shapes, dropping anything
+ *      malformed — so a single bad question can't crash the UI.
  */
 function parseQuiz(raw: string): QuizQuestion[] {
   let text = raw.trim();
@@ -86,29 +117,52 @@ function parseQuiz(raw: string): QuizQuestion[] {
   }
   if (!Array.isArray(parsed)) return [];
 
-  // 4) Validate each entry. The `correct` index must point at a real option, or
-  //    the question is unscoreable and we drop it.
+  // 4) Normalise + validate each entry. Drop anything that doesn't fit either
+  //    shape (filter out the nulls).
   return parsed
-    .filter((q): q is QuizQuestion => {
-      if (typeof q !== "object" || q === null) return false;
-      const { question, options, correct } = q as Record<string, unknown>;
-      return (
-        typeof question === "string" &&
-        question.trim().length > 0 &&
-        Array.isArray(options) &&
-        options.length >= 2 &&
-        options.every((o) => typeof o === "string") &&
-        typeof correct === "number" &&
-        Number.isInteger(correct) &&
-        correct >= 0 &&
-        correct < options.length
-      );
-    })
-    .map((q) => ({
-      question: q.question.trim(),
-      options: q.options.map((o) => o.trim()),
-      correct: q.correct,
-    }));
+    .map(normaliseQuestion)
+    .filter((q): q is QuizQuestion => q !== null);
+}
+
+/**
+ * Coerce one raw object into a valid QuizQuestion, or null if it's malformed.
+ * Short-answer entries (type "short_answer") need a question + sample_answer.
+ * Everything else is treated as multiple-choice — including legacy cached
+ * questions that predate the `type` field — and needs options + an in-range
+ * `correct` index.
+ */
+function normaliseQuestion(q: unknown): QuizQuestion | null {
+  if (typeof q !== "object" || q === null) return null;
+  const obj = q as Record<string, unknown>;
+
+  const question = typeof obj.question === "string" ? obj.question.trim() : "";
+  if (question.length === 0) return null;
+
+  if (obj.type === "short_answer") {
+    if (typeof obj.sample_answer !== "string" || obj.sample_answer.trim().length === 0) {
+      return null;
+    }
+    return { question, type: "short_answer", sample_answer: obj.sample_answer.trim() };
+  }
+
+  const { options, correct } = obj;
+  if (
+    Array.isArray(options) &&
+    options.length >= 2 &&
+    options.every((o) => typeof o === "string") &&
+    typeof correct === "number" &&
+    Number.isInteger(correct) &&
+    correct >= 0 &&
+    correct < options.length
+  ) {
+    return {
+      question,
+      type: "multiple_choice",
+      options: (options as string[]).map((o) => o.trim()),
+      correct,
+    };
+  }
+  return null;
 }
 
 /**
@@ -170,10 +224,8 @@ export async function POST(request: Request) {
 
   const { source, apiKey } = body;
 
-  // 2) Validate. Precise messages beat a vague failure inside the Anthropic call.
-  if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
-    return NextResponse.json({ error: "Missing API key." }, { status: 400 });
-  }
+  // 2) Validate `source` only — `apiKey` is checked after the cache lookup so a
+  //    cached quiz serves without a key (required only on a real miss).
   if (typeof source !== "string" || source.trim().length === 0) {
     return NextResponse.json({ error: "Missing source." }, { status: 400 });
   }
@@ -209,6 +261,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ questions: cached.questions });
   }
 
+  // 5b) Cache miss → we must call Anthropic, so a key is now required.
+  if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
+    return NextResponse.json({ error: "Missing API key." }, { status: 400 });
+  }
+
+  // 5c) Resolve the config from the body. `count` is clamped to 3–10; `types`
+  //     keeps only the known values and falls back to multiple-choice if the
+  //     student somehow sent an empty/garbage list.
+  const count = clampCount(body.count);
+  const requestedTypes = Array.isArray(body.types)
+    ? body.types.filter((t): t is (typeof QUESTION_TYPES)[number] =>
+        (QUESTION_TYPES as readonly string[]).includes(t),
+      )
+    : [];
+  const types = requestedTypes.length > 0 ? requestedTypes : ["multiple_choice"];
+
   // 6) Fetch the source's chunks (the material to make questions from). RLS
   //    already scopes rows to the user; we also filter by user_id for explicit
   //    intent.
@@ -241,8 +309,8 @@ export async function POST(request: Request) {
   try {
     const message = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 2048,
-      system: SYSTEM_PROMPT,
+      max_tokens: 3072,
+      system: buildQuizPrompt(count, types),
       messages: [{ role: "user", content: `Material:\n\n${material}` }],
     });
 

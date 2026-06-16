@@ -30,9 +30,11 @@ export const runtime = "nodejs";
 type Flashcard = { front: string; back: string };
 
 // The POST body. GET takes its source from the query string instead.
+// `apiKey` is optional: a cached set is returned without a key, so it's only
+// required on an actual cache miss (when we have to call Anthropic).
 type FlashcardsRequest = {
   source: string;
-  apiKey: string;
+  apiKey?: string;
 };
 
 // Model id as a one-line constant, same convention as the other routes. We use
@@ -153,10 +155,8 @@ export async function POST(request: Request) {
 
   const { source, apiKey } = body;
 
-  // 2) Validate. Precise messages beat a vague failure inside the Anthropic call.
-  if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
-    return NextResponse.json({ error: "Missing API key." }, { status: 400 });
-  }
+  // 2) Validate `source` only — `apiKey` is checked after the cache lookup so a
+  //    cached set serves without a key (required only on a real miss).
   if (typeof source !== "string" || source.trim().length === 0) {
     return NextResponse.json({ error: "Missing source." }, { status: 400 });
   }
@@ -190,6 +190,11 @@ export async function POST(request: Request) {
   }
   if (cached) {
     return NextResponse.json({ cards: cached.cards });
+  }
+
+  // 5b) Cache miss → we must call Anthropic, so a key is now required.
+  if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
+    return NextResponse.json({ error: "Missing API key." }, { status: 400 });
   }
 
   // 6) Fetch the source's chunks (the material to make cards from). RLS already

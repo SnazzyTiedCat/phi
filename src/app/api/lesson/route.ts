@@ -33,7 +33,9 @@ export const runtime = "nodejs";
 type LessonRequest = {
   chunks: string[];
   source: string;
-  apiKey: string;
+  // Optional: the route serves a cached lesson WITHOUT a key. The key is only
+  // required on an actual cache miss, when we have to call Anthropic.
+  apiKey?: string;
   // Optional section context. Present when the student opened ONE section of a
   // mapped document (the lesson page already filtered `chunks` to that section).
   // We use them only for the cache key and to focus the system prompt — the
@@ -89,28 +91,13 @@ export async function POST(request: Request) {
     Number.isInteger(sectionIndex) &&
     sectionIndex >= 0;
 
-  // 2) Validate. All three fields are required. We check them explicitly so the
-  //    error message tells the caller exactly what's missing instead of letting
-  //    a vague failure surface later inside the Anthropic call.
-  //    - `apiKey` must be a non-empty string (a blank key would just 401 at
-  //      Anthropic with a less helpful message).
-  //    - `source` must be a non-empty string.
-  //    - `chunks` must be a non-empty array (no chunks = nothing to teach).
-  if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
-    return NextResponse.json(
-      { error: "Missing API key." },
-      { status: 400 },
-    );
-  }
+  // 2) Validate `source` only — it's the cache key, so we need it before we can
+  //    even check the cache. `apiKey` and `chunks` are validated LATER, after the
+  //    cache check, because a cache hit needs neither: viewing an already-taught
+  //    lesson must never require a key.
   if (typeof source !== "string" || source.trim().length === 0) {
     return NextResponse.json(
       { error: "Missing source." },
-      { status: 400 },
-    );
-  }
-  if (!Array.isArray(chunks) || chunks.length === 0) {
-    return NextResponse.json(
-      { error: "No content to teach. This source has no chunks." },
       { status: 400 },
     );
   }
@@ -170,6 +157,23 @@ export async function POST(request: Request) {
   }
 
   console.log("[lesson] Cache miss — generating new lesson");
+
+  // 4c) Cache miss → we must call Anthropic, which needs the user's key. If it's
+  //     absent the client can't generate yet; signal that with `needsKey` so the
+  //     UI shows the "add your key in Account" prompt instead of a hard error.
+  //     (This is NOT an error case — it's the expected first-visit state for a
+  //     student who hasn't saved a key.)
+  if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
+    return NextResponse.json({ needsKey: true });
+  }
+  // chunks are only needed to generate (a hit returns without them), so we
+  // validate them here rather than up front.
+  if (!Array.isArray(chunks) || chunks.length === 0) {
+    return NextResponse.json(
+      { error: "No content to teach. This source has no chunks." },
+      { status: 400 },
+    );
+  }
 
   // 5) Build the user message. The chunks are the raw study material; joining
   //    them with blank lines reconstructs a readable document for Claude to
