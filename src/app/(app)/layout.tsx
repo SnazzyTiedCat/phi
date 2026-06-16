@@ -74,23 +74,30 @@ export default async function AppLayout({
   }
 
   // Which uploads were mapped into sections — those route to their first section
-  // rather than a flat lesson.
+  // rather than a flat lesson — and their optional friendly title (set by the
+  // rename action). `display_title` is nullable: only renamed materials have one.
   const { data: sourceRows } = await supabase
     .from("sources")
-    .select("source_name, sections")
+    .select("source_name, sections, display_title")
     .eq("user_id", user.id);
 
   const sectionedNames = new Set<string>();
+  const titleByName = new Map<string, string>();
   for (const row of sourceRows ?? []) {
+    const name = normalise(row.source_name);
     const sections = (row.sections ?? []) as unknown[];
-    if (sections.length > 0) sectionedNames.add(normalise(row.source_name));
+    if (sections.length > 0) sectionedNames.add(name);
+    if (typeof row.display_title === "string" && row.display_title.trim()) {
+      titleByName.set(name, row.display_title.trim());
+    }
   }
 
-  // No display_title/icon columns exist yet, so the title is the filename and the
-  // icon defaults to φ (rendered inside the Sidebar).
+  // The list label is the renamed title when one exists, else the filename. The
+  // icon defaults to φ (rendered inside the Sidebar). `name` stays the raw
+  // source_name — it's the stable key/URL, never the display string.
   const sidebarSources: SidebarSource[] = orderedNames.map((name) => ({
     name,
-    title: name,
+    title: titleByName.get(name) ?? name,
     hasSections: sectionedNames.has(name),
   }));
 

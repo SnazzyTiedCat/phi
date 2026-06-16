@@ -88,15 +88,19 @@ export default async function DashboardPage() {
   // the map by the normalised filename so it matches the chunks-derived list.
   const { data: sourceRows } = await supabase
     .from("sources")
-    .select("source_name, sections")
+    .select("source_name, sections, display_title")
     .eq("user_id", user?.id ?? "");
 
   const sectionsBySource = new Map<string, Section[]>();
+  // Friendly titles set by the rename action. Nullable: only renamed materials
+  // have one. Card headings fall back to the filename when absent.
+  const titleBySource = new Map<string, string>();
   for (const row of sourceRows ?? []) {
-    sectionsBySource.set(
-      normalise(row.source_name),
-      (row.sections ?? []) as Section[],
-    );
+    const name = normalise(row.source_name);
+    sectionsBySource.set(name, (row.sections ?? []) as Section[]);
+    if (typeof row.display_title === "string" && row.display_title.trim()) {
+      titleBySource.set(name, row.display_title.trim());
+    }
   }
 
   // ── Fetch which lessons are already cached ────────────────────────────────
@@ -156,7 +160,7 @@ export default async function DashboardPage() {
           href="/upload"
           className="inline-flex shrink-0 items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
         >
-          Upload material
+          Upload Material
         </Link>
       </div>
 
@@ -168,6 +172,9 @@ export default async function DashboardPage() {
         <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {normalisedSources.map((source) => {
             const sections = sectionsBySource.get(source) ?? [];
+            // Card heading: the renamed title when set, else the filename. The
+            // URL still uses the raw `source` key — only the label changes.
+            const label = titleBySource.get(source) ?? source;
 
             // ── Flat fallback card ──────────────────────────────────────────
             // No section roadmap (old upload, or mapping was skipped/failed).
@@ -189,7 +196,7 @@ export default async function DashboardPage() {
                   </span>
 
                   <h2 className="mt-4 break-words text-base font-medium text-text">
-                    {source}
+                    {label}
                   </h2>
 
                   <span
@@ -229,7 +236,7 @@ export default async function DashboardPage() {
                 </span>
 
                 <h2 className="mt-4 break-words text-base font-medium text-text">
-                  {source}
+                  {label}
                 </h2>
 
                 {/* Card CTA → opens the first section. Links (not the whole
@@ -293,7 +300,7 @@ export default async function DashboardPage() {
             href="/upload"
             className="mt-6 inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
           >
-            Upload material
+            Upload Material
           </Link>
         </div>
       )}

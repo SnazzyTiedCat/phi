@@ -11,6 +11,7 @@ import {
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useSidebar } from "@/contexts/SidebarContext";
+import MaterialEditPanel from "./MaterialEditPanel";
 
 /**
  * One material in the sidebar list. The Server Component (the app layout) derives
@@ -38,6 +39,9 @@ export default function Sidebar({ sources }: { sources: SidebarSource[] }) {
   // The active material is whichever one the current URL is pointing at. Reading
   // it here (client-side) is necessary because layouts don't receive searchParams.
   const activeSource = useSearchParams().get("source");
+  // The material currently open in the edit panel (null = panel closed). Lifted
+  // here so there's a single shared panel rather than one per row.
+  const [editing, setEditing] = useState<SidebarSource | null>(null);
 
   return (
     <>
@@ -100,6 +104,7 @@ export default function Sidebar({ sources }: { sources: SidebarSource[] }) {
                   source={source}
                   active={activeSource === source.name}
                   onNavigate={close}
+                  onEdit={() => setEditing(source)}
                 />
               ))
             )}
@@ -118,6 +123,9 @@ export default function Sidebar({ sources }: { sources: SidebarSource[] }) {
           <span className="text-[17px] font-bold tracking-tight text-text">Phi</span>
         </div>
       </aside>
+
+      {/* Single shared edit panel (portals to <body>). */}
+      <MaterialEditPanel source={editing} onClose={() => setEditing(null)} />
     </>
   );
 }
@@ -131,10 +139,13 @@ function MaterialItem({
   source,
   active,
   onNavigate,
+  onEdit,
 }: {
   source: SidebarSource;
   active: boolean;
   onNavigate: () => void;
+  // Opens the shared edit panel. Both Edit and Delete route here for now.
+  onEdit: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -192,7 +203,10 @@ function MaterialItem({
             <button
               role="menuitem"
               type="button"
-              onClick={() => setMenuOpen(false)}
+              onClick={() => {
+                setMenuOpen(false);
+                onEdit();
+              }}
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text transition-colors hover:bg-white/5"
             >
               <PencilSquareIcon className="h-4 w-4 text-c-400" />
@@ -201,7 +215,10 @@ function MaterialItem({
             <button
               role="menuitem"
               type="button"
-              onClick={() => setMenuOpen(false)}
+              onClick={() => {
+                setMenuOpen(false);
+                onEdit();
+              }}
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-400 transition-colors hover:bg-red-500/10"
             >
               <TrashIcon className="h-4 w-4" />

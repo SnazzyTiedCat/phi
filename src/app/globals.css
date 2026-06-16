@@ -51,6 +51,9 @@
      Spades expo curve); the dimmed backdrop just fades. */
   --animate-modal-in: modal-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-overlay-in: overlay-in 0.25s ease-out both;
+
+  /* Material edit panel — slides in from the right edge on the Spades curve. */
+  --animate-slide-in-right: slide-in-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* Inter is the optional "Reading font" (Appearance setting). next/font loads it
@@ -161,6 +164,15 @@
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
   }
 }
 

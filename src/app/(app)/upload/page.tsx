@@ -184,7 +184,7 @@ export default function UploadPage() {
         }`}
       >
         <h1 className="text-3xl font-semibold tracking-tight text-text">
-          Upload material
+          Upload Material
         </h1>
         <p className="mt-2 text-sm text-muted">
           Drop a PDF or text file and Phi will break it into lessons.
