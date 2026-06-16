@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Mono } from "next/font/google";
+import { Space_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
 // Space Mono is the brand's single typeface (Spades DESIGN.md §2.2). It isn't a
@@ -10,6 +10,16 @@ const spaceMono = Space_Mono({
   variable: "--font-space-mono",
   subsets: ["latin"],
   weight: ["400", "700"],
+  display: "swap",
+});
+
+// Inter is the optional "Reading font" a student can switch to in Account →
+// Appearance. Exposed as --font-inter; globals.css turns it into a `font-inter`
+// utility that the (app) content wrapper applies when chosen. Loaded here (not
+// per-page) so it's ready instantly when toggled.
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
   display: "swap",
 });
 
@@ -25,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${spaceMono.variable} h-full`}>
+    <html lang="en" className={`${spaceMono.variable} ${inter.variable} h-full`}>
       <body className="h-full antialiased">
         {/* Atmospheric orbs (DESIGN.md §2.7) — two barely-visible radial
             gradients that give the near-black void a sense of depth. Fixed and

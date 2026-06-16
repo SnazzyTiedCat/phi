@@ -53,6 +53,15 @@
   --animate-overlay-in: overlay-in 0.25s ease-out both;
 }
 
+/* Inter is the optional "Reading font" (Appearance setting). next/font loads it
+   and exposes its family on `--font-inter` (set on <html>). We map a `font-inter`
+   utility to it with `@theme inline` — the `inline` keyword makes Tailwind inline
+   `var(--font-inter)` into the utility WITHOUT also emitting its own
+   `:root { --font-inter }`, which would otherwise shadow next/font's value. */
+@theme inline {
+  --font-inter: var(--font-inter);
+}
+
 /* The per-page entrance. Tailwind v4 turns the `--animate-page-in` theme var
    above into an `animate-page-in` utility, so this needs no plugin (core
    Tailwind has no `animate-in`/`fade-in`). A plain opacity fade = "subtle

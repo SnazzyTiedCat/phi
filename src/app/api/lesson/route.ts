@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { depthInstruction } from "@/lib/tutor-depth";
 
 /**
  * POST /api/lesson
@@ -39,6 +40,9 @@ type LessonRequest = {
   // route never re-queries chunks. Absent = whole-document lesson (legacy path).
   sectionIndex?: number;
   sectionTitle?: string;
+  // The student's "Explanation depth" setting (Tutor). Optional — absent or
+  // "standard" leaves the default teaching voice unchanged.
+  depth?: string;
 };
 
 // The exact tutor system prompt. Kept as a module-level constant (not inlined)
@@ -75,7 +79,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { chunks, source, apiKey, sectionIndex, sectionTitle } = body;
+  const { chunks, source, apiKey, sectionIndex, sectionTitle, depth } = body;
 
   // A section lesson is one where a valid, non-negative section index came in.
   // We treat anything else (undefined, non-integer, negative) as a whole-doc
@@ -178,11 +182,20 @@ export async function POST(request: Request) {
   // and structure rules still apply. `sectionIndex + 1` is the human-facing
   // number (the index is 0-based); the title is whatever Claude named it at
   // upload. When there's no section, the base prompt is used unchanged.
-  const systemPrompt = isSection
+  const baseSystemPrompt = isSection
     ? `${SYSTEM_PROMPT}\n\nYou are teaching Section ${sectionIndex! + 1}${
         sectionTitle ? `: ${sectionTitle}` : ""
       }. Focus exclusively on this section. The material below is only this section's content — teach it as a self-contained lesson, not the whole document.`
     : SYSTEM_PROMPT;
+
+  // Append the student's explanation-depth instruction (Tutor setting), if any.
+  // Caveat: lessons are CACHED (see the cache check above), so depth only shapes
+  // the FIRST generation of a given source/section — changing it later won't
+  // rewrite an already-cached lesson.
+  const depthLine = depthInstruction(depth);
+  const systemPrompt = depthLine
+    ? `${baseSystemPrompt}\n\n${depthLine}`
+    : baseSystemPrompt;
 
   // 6) Create an Anthropic client with the USER'S key (not a server env var).
   //    Each request makes its own client because each request carries a

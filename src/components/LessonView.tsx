@@ -13,6 +13,7 @@ import {
   EllipsisHorizontalIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
+import { EXPLANATION_DEPTH_KEY } from "@/lib/tutor-depth";
 
 /**
  * LessonView — the interactive half of the lesson page.
@@ -124,12 +125,21 @@ export default function LessonView({
         return;
       }
 
-      // 3) Key exists → request the lesson.
+      // 3) Key exists → request the lesson. Forward the student's explanation-
+      //    depth setting (Tutor) so the prompt can shape the teaching voice.
+      const depth = localStorage.getItem(EXPLANATION_DEPTH_KEY);
       try {
         const res = await fetch("/api/lesson", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chunks, source, apiKey, sectionIndex, sectionTitle }),
+          body: JSON.stringify({
+            chunks,
+            source,
+            apiKey,
+            sectionIndex,
+            sectionTitle,
+            depth,
+          }),
         });
 
         const data: { lesson?: string; error?: string } = await res.json();
@@ -378,10 +388,11 @@ export default function LessonView({
     setIsChatLoading(true);
 
     try {
+      const depth = localStorage.getItem(EXPLANATION_DEPTH_KEY);
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed, source, history, apiKey }),
+        body: JSON.stringify({ message: trimmed, source, history, apiKey, depth }),
       });
 
       // Errors come back as JSON (the route returns JSON { error } for any

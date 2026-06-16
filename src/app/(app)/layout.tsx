@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SidebarProvider } from "@/contexts/SidebarContext";
+import { FontProvider } from "@/contexts/FontContext";
 import SidebarToggle from "@/components/SidebarToggle";
 import Sidebar, { type SidebarSource } from "@/components/Sidebar";
 import PageTransition from "./PageTransition";
@@ -138,7 +139,9 @@ export default async function AppLayout({
             it. PageTransition fades each route in, keyed on the pathname so the
             fade replays on every navigation. */}
         <main className="relative z-10 flex-1">
-          <PageTransition>{children}</PageTransition>
+          <FontProvider>
+            <PageTransition>{children}</PageTransition>
+          </FontProvider>
         </main>
       </div>
     </SidebarProvider>
