@@ -77,7 +77,7 @@ What has actually been built and is running. Beyond the locked MVP, the app has 
 **App shell** — every authenticated page lives in the `(app)` route group, wrapped in a sidebar shell that replaced the old top navbar:
 
 - A floating glass **φ toggle** (fixed, top-left): φ → menu icon on hover, ✕ when open.
-- A slide-in **Sidebar** drawer: Account (top), a gold "Upload Material" button, a scrollable list of the student's materials (fetched server-side in the layout), and the Phi wordmark (footer). A material opens its lesson; a ⋮ menu stubs Edit/Delete (UI only for now).
+- A slide-in **Sidebar** drawer: Account (top), a gold "Upload Material" button, a scrollable list of the student's materials (fetched server-side in the layout), and the Phi wordmark (footer). A material opens its lesson; a ⋮ menu's Edit/Delete both open the **MaterialEditPanel** (a right-edge slide-in: rename at the top, delete-confirm at the bottom).
 
 **Routes live**
 
@@ -104,10 +104,13 @@ What has actually been built and is running. Beyond the locked MVP, the app has 
 | Endpoint | Status | Notes |
 |---|---|---|
 | `POST /api/upload` | Done | `unpdf` for PDFs; ~500-token chunks; zero-vector placeholder embeddings |
-| `POST /api/lesson` | Done | Claude `claude-opus-4-7`; cached to `lessons`; accepts `depth` (tutor setting) |
+| `POST /api/lesson` | Done | Claude `claude-opus-4-7`; cached to `lessons`; accepts `depth`. Serves cache without a key; returns `{ needsKey }` on a miss |
 | `POST /api/chat` | Done | RAG from chunks; streamed reply via `text/plain`; accepts `depth` |
-| `GET` / `POST /api/flashcards` | Done | GET cache-only; POST Claude `claude-sonnet-4-6` → `flashcards` table |
-| `GET` / `POST /api/quiz` | Done | Multiple-choice quiz; mirrors flashcards → `quizzes` table |
+| `GET` / `POST /api/flashcards` | Done | GET cache-only; POST Claude `claude-sonnet-4-6` → `flashcards`. Key required only on a cache miss |
+| `GET` / `POST /api/quiz` | Done | Multiple-choice **and** short-answer questions (configurable count + types) → `quizzes`. Key required only on a miss |
+| `POST /api/grade` | Done | Live (uncached) short-answer grading via Claude Haiku — YES/NO meaning-match vs. the question's `sample_answer` |
+| `POST /api/material/rename` | Done | Writes `sources.display_title` (needs the column — see `supabase/display_title.sql`); `source_name` stays the stable key |
+| `POST /api/material/delete` | Done | User-scoped cascade across `chunks`/`sources`/`lessons`/`flashcards`/`quizzes`; cookie client, not service-role |
 | `POST /api/account/delete` | Done | Service-role (`SUPABASE_SERVICE_ROLE_KEY`); verifies session, deletes the user; cascading FKs remove their data |
 
 **Lesson view features**

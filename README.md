@@ -30,7 +30,7 @@ NotebookLM is wide — it answers questions about anything. Phi is deep — it d
 - **Read-along** — the lesson is read aloud via the browser's Web Speech API (keyless, zero-dependency) with play / pause / stop.
 - **Chat sidebar** — pause mid-lesson to ask for a simpler explanation or a recap, answered over your material via RAG, streamed in real time.
 - **Flashcards** — generated on demand from the lesson, with flip-card review.
-- **Quiz** — a short multiple-choice quiz generated from the same source to test recall.
+- **Quiz** — a short quiz generated from the same source to test recall: multiple-choice and/or short-answer questions (you pick), with short answers graded by AI.
 
 ---
 
