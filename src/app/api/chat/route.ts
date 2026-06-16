@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { depthInstruction } from "@/lib/tutor-depth";
 
 /**
  * POST /api/chat
@@ -37,6 +38,9 @@ type ChatRequest = {
   source: string;
   history: { role: "user" | "assistant"; content: string }[];
   apiKey: string;
+  // The student's "Explanation depth" setting (Tutor). Optional — absent or
+  // "standard" leaves the default chat voice unchanged.
+  depth?: string;
 };
 
 // The model id, pulled out as a constant so a future upgrade is one edit — same
@@ -52,10 +56,7 @@ Answer their questions using only the provided source material.
 Be concise, clear, and encouraging. If they ask to explain something simply,
 use an analogy. If they ask to skip ahead, give a brief recap of what they'd miss.
 Keep responses under 150 words unless a detailed explanation is truly needed.
-Do not use emojis anywhere in your response. Use clean typography and formatting only.
-
-Source material:
-`;
+Do not use emojis anywhere in your response. Use clean typography and formatting only.`;
 
 export async function POST(request: Request) {
   // 1) Parse the body. Invalid JSON is the caller's fault → 400, not a 500.
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Expected a JSON body." }, { status: 400 });
   }
 
-  const { message, source, history, apiKey } = body;
+  const { message, source, history, apiKey, depth } = body;
 
   // 2) Validate all four fields. Explicit checks give the caller a precise
   //    message instead of a vague failure deep inside the Anthropic call.
@@ -127,9 +128,14 @@ export async function POST(request: Request) {
     );
   }
 
-  // 6) Build the system prompt: fixed instructions + the student's material.
+  // 6) Build the system prompt: fixed instructions + (optional) depth line +
+  //    the student's material. Unlike lessons, chat isn't cached, so the depth
+  //    setting takes effect on the very next message.
   const material = chunkRows.map((row) => row.content).join("\n\n");
-  const systemPrompt = SYSTEM_PROMPT_BASE + material;
+  const depthLine = depthInstruction(depth);
+  const systemPrompt = `${SYSTEM_PROMPT_BASE}${
+    depthLine ? `\n${depthLine}` : ""
+  }\n\nSource material:\n${material}`;
 
   // 7) Build the conversation. Anthropic's `messages` array is the running
   //    transcript: all prior turns, then the new question last. The client

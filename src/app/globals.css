@@ -7,15 +7,62 @@
   --color-accent-dim: #a07832;
   --color-text: #f0f0f0;
   --color-muted: #555555;
+  /* A brighter, intentional secondary for body copy — sits between the bright
+     --color-text and the dim --color-muted, so paragraphs read as a deliberate
+     "secondary" tier rather than just another grey step. Generates text-secondary. */
+  --color-secondary: #a3a3a3;
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Space Mono is the single typeface (Spades DESIGN.md §2.2) — one face for
+     the whole product, so sans and mono both resolve to it. */
+  --font-sans: var(--font-space-mono);
+  --font-mono: var(--font-space-mono);
+
+  /* The Spades 14-step grayscale (DESIGN.md §2.1). Contrast carries all
+     hierarchy — these generate text-c-400, bg-c-900, border-c-800, etc. */
+  --color-c-black: #000000;
+  --color-c-950: #080808;
+  --color-c-900: #111111;
+  --color-c-850: #1a1a1a;
+  --color-c-800: #222222;
+  --color-c-700: #333333;
+  --color-c-600: #555555;
+  --color-c-500: #777777;
+  --color-c-400: #999999;
+  --color-c-300: #bbbbbb;
+  --color-c-200: #cccccc;
+  --color-c-100: #e5e5e5;
+  --color-c-50: #f2f2f2;
 
   --animate-fade-in-up: fade-in-up 1s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-float: float 8s ease-in-out infinite;
   --animate-glow-breathe: glow-breathe 6s ease-in-out infinite;
   --animate-shimmer-text: shimmer-text 4s linear infinite;
-  --animate-page-in: page-in 0.3s ease-out both;
+  /* Page-level entrance (PageTransition): fade + a small rise, on the expo
+     curve over 700ms — the Spades section-reveal tempo. */
+  --animate-page-in: page-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  /* Atmospheric orbs (DESIGN.md §2.7). The top-right orb drifts very slowly;
+     the bottom-left is static. Both live in the root layout. */
+  --animate-orb-drift: orb-drift 28s ease-in-out infinite alternate;
+  /* Hero scroll indicator — a slow breathing pulse. */
+  --animate-breathe: breathe 3s ease-in-out infinite;
+
+  /* Flashcard "expand" modal — the card scales up from 95% as it fades in (the
+     Spades expo curve); the dimmed backdrop just fades. */
+  --animate-modal-in: modal-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-overlay-in: overlay-in 0.25s ease-out both;
+
+  /* Material edit panel — slides in from the right edge on the Spades curve. */
+  --animate-slide-in-right: slide-in-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Inter is the optional "Reading font" (Appearance setting). next/font loads it
+   and exposes its family on `--font-inter` (set on <html>). We map a `font-inter`
+   utility to it with `@theme inline` — the `inline` keyword makes Tailwind inline
+   `var(--font-inter)` into the utility WITHOUT also emitting its own
+   `:root { --font-inter }`, which would otherwise shadow next/font's value. */
+@theme inline {
+  --font-inter: var(--font-inter);
 }
 
 /* The per-page entrance. Tailwind v4 turns the `--animate-page-in` theme var
@@ -25,9 +72,11 @@
 @keyframes page-in {
   from {
     opacity: 0;
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -74,9 +123,76 @@
   }
 }
 
+/* Top-right orb's slow drift. `alternate` eases out to the offset and back. */
+@keyframes orb-drift {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(30px, -20px);
+  }
+}
+
+/* Scroll-indicator chevron: opacity + a small vertical nudge, paired so it
+   never animates one property alone (DESIGN.md §3.6). */
+@keyframes breathe {
+  0%, 100% {
+    opacity: 0.2;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.55;
+    transform: translateY(4px);
+  }
+}
+
+/* Flashcard modal: card scales + fades in; backdrop just fades. */
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 :root {
   --background: #080808;
   --foreground: #f0f0f0;
+}
+
+html {
+  /* Smooth in-page anchor scrolling for the hero's "See how it works" jump. */
+  scroll-behavior: smooth;
+}
+
+/* Scroll-snapping is scoped to the marketing page only: the document scroller
+   snaps to section starts WHEN a `.snap-page` element is present (the landing
+   <main>). `:has()` keeps it off every authenticated route — those scroll
+   normally — without making <main> an inner scroll container (which would break
+   the viewport-rooted IntersectionObserver reveals). */
+html:has(.snap-page) {
+  scroll-snap-type: y mandatory;
 }
 
 html,
@@ -87,7 +203,84 @@ body {
 }
 
 body {
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  background-color: #080808;
+  font-family: var(--font-space-mono), ui-monospace, "SFMono-Regular", monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Glass surfaces (DESIGN.md §2.5) ──────────────────────────────────────
+   Reserved for surfaces that float above content. Two levels: Subtle (dimmed,
+   for the de-emphasised comparison card) and Standard (cards, panels). Blur
+   drops to 12px on mobile for performance, and falls back to an opaque panel
+   where backdrop-filter isn't supported. */
+.glass-standard {
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+/* Deep, layered card shadow (--sh-lg), plus a 1px inset top highlight so each
+   card reads as a lifted container against the near-black page — the difference
+   between "faint glass" and "this is a card". */
+.shadow-card {
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+    0 8px 40px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 768px) {
+  .glass-standard,
+  .glass-subtle {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-standard,
+  .glass-subtle {
+    background: #111111;
+  }
+}
+
+/* A material row's "⋮" options button. On touch devices (no hover) it's always
+   visible, since there's no hover to reveal it; on pointer devices it stays
+   hidden until the row is hovered, then fades in. `.group:hover` matches the
+   hovered row (each row carries Tailwind's `group` class). */
+.material-menu {
+  opacity: 1;
+}
+@media (hover: hover) {
+  .material-menu {
+    opacity: 0;
+  }
+  .group:hover .material-menu {
+    opacity: 1;
+  }
+}
+
+/* Visible focus ring on keyboard navigation (DESIGN.md §15). */
+:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 3px;
+}
+
+/* Respect reduced-motion: neutralise the cinematic timing everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

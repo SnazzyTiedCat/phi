@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { extractText } from "unpdf";
+import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -84,6 +85,118 @@ function chunkText(text: string): string[] {
 async function extractPdfText(data: Uint8Array): Promise<string> {
   const { text } = await extractText(data, { mergePages: true });
   return text;
+}
+
+// --- Section mapping -------------------------------------------------------
+// The model that names the document's sections. Sonnet (not Opus): naming a
+// handful of sections from the first few thousand characters is well within its
+// ability and cheaper per token — and the student pays with their own key. Same
+// choice /api/flashcards makes for the same reason.
+const MAPPING_MODEL = "claude-sonnet-4-6";
+
+// The exact prompt, verbatim and in one place because the JSON-only instruction
+// is load-bearing: we parse the reply as data, not prose. The raw document text
+// is appended after this prefix at call time.
+const MAPPING_PROMPT = `You are analyzing a document to create a study roadmap.
+Read this content and identify 3-8 logical sections (chapters, units, topics, or parts).
+Return ONLY a JSON array, no markdown:
+[{"title": "Section name", "description": "One sentence what this covers"}]
+
+Document content (first 4000 chars): `;
+
+// One section as stored in `sources.sections` (jsonb). `start_chunk`/`end_chunk`
+// are the inclusive chunk range this section spans. The authoritative filter is
+// `section_index` on the chunk rows themselves; these two are kept for display.
+type Section = {
+  index: number;
+  title: string;
+  description: string;
+  start_chunk: number;
+  end_chunk: number;
+};
+
+// What Claude returns, before we attach indices and chunk ranges.
+type ParsedSection = { title: string; description: string };
+
+/**
+ * Pull a clean ParsedSection[] out of the model's reply. Mirrors the defensive
+ * parser in /api/flashcards: strip a code fence, narrow to the array literal,
+ * JSON.parse, then keep only entries with a string `title`. A missing
+ * `description` becomes "" rather than discarding the whole section. Anything
+ * unparseable yields [], which the caller treats as "no sections".
+ */
+function parseSections(raw: string): ParsedSection[] {
+  let text = raw.trim();
+
+  const fence = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fence) text = fence[1].trim();
+
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start !== -1 && end !== -1 && end > start) {
+    text = text.slice(start, end + 1);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed
+    .filter(
+      (s): s is { title: string; description?: unknown } =>
+        typeof s === "object" &&
+        s !== null &&
+        typeof (s as Record<string, unknown>).title === "string",
+    )
+    .map((s) => ({
+      title: (s.title as string).trim(),
+      description: typeof s.description === "string" ? s.description.trim() : "",
+    }));
+}
+
+/**
+ * Turn the named sections into concrete chunk ranges via a simple even split,
+ * and produce the per-chunk `section_index` array used when inserting rows.
+ *
+ * - The section count is clamped to the chunk count, so we never emit an empty
+ *   section (more sections than chunks would otherwise leave some with none).
+ * - The remainder is spread one-per-section across the first sections, so sizes
+ *   differ by at most one and every chunk belongs to exactly one section.
+ */
+function buildSections(
+  parsed: ParsedSection[],
+  numChunks: number,
+): { sections: Section[]; chunkSectionIndex: number[] } {
+  const count = Math.max(1, Math.min(parsed.length, numChunks));
+  const base = Math.floor(numChunks / count);
+  const remainder = numChunks % count;
+
+  const sections: Section[] = [];
+  const chunkSectionIndex = new Array<number>(numChunks).fill(0);
+
+  let cursor = 0;
+  for (let i = 0; i < count; i++) {
+    const size = base + (i < remainder ? 1 : 0);
+    const startChunk = cursor;
+    const endChunk = cursor + size - 1; // inclusive
+    sections.push({
+      index: i,
+      title: parsed[i].title,
+      description: parsed[i].description,
+      start_chunk: startChunk,
+      end_chunk: endChunk,
+    });
+    for (let j = startChunk; j <= endChunk && j < numChunks; j++) {
+      chunkSectionIndex[j] = i;
+    }
+    cursor = endChunk + 1;
+  }
+
+  return { sections, chunkSectionIndex };
 }
 
 export async function POST(request: Request) {
@@ -179,17 +292,66 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  // 9) Persist to Supabase. Each chunk becomes one row in the `chunks` table.
-  //    The `embedding` column is vector(1536). We store a zero vector now as a
-  //    placeholder — the shape is correct so the column accepts it, and real
-  //    embeddings can be back-filled later without a schema change. pgvector
-  //    reads the vector from PostgREST as a bracketed comma-separated string.
+  // 9) Map the document into sections (best-effort).
+  //    This is the ONE place chunk order is unambiguous — the `chunks` array
+  //    above — so we assign each chunk its `section_index` HERE, at insert time,
+  //    rather than back-filling later (the `chunks` table has no ordering column
+  //    to reconstruct order from afterwards). Claude only NAMES the sections;
+  //    the boundaries are a plain even split over the chunk count.
+  //
+  //    "Best-effort" is the contract: if there's no key, or Claude fails, or the
+  //    reply can't be parsed, we still save the chunks as one implicit section
+  //    (section_index 0) and skip the `sources` row. An upload must never fail
+  //    because the AI mapping did — the student's material is saved regardless.
+  const apiKeyValue = formData.get("apiKey");
+  const apiKey = typeof apiKeyValue === "string" ? apiKeyValue.trim() : "";
+
+  let sections: Section[] = [];
+  let chunkSectionIndex = new Array<number>(chunks.length).fill(0);
+
+  if (apiKey.length > 0) {
+    try {
+      const anthropic = new Anthropic({ apiKey });
+      const message = await anthropic.messages.create({
+        model: MAPPING_MODEL,
+        max_tokens: 1024,
+        messages: [
+          { role: "user", content: `${MAPPING_PROMPT}${text.slice(0, 4000)}` },
+        ],
+      });
+
+      const reply = message.content
+        .filter((block) => block.type === "text")
+        .map((block) => block.text)
+        .join("\n")
+        .trim();
+
+      const parsed = parseSections(reply);
+      if (parsed.length > 0) {
+        const built = buildSections(parsed, chunks.length);
+        sections = built.sections;
+        chunkSectionIndex = built.chunkSectionIndex;
+      }
+    } catch (err) {
+      // Logged, never surfaced: the upload proceeds without a section roadmap.
+      console.error("[upload] section mapping failed (saving without sections):", err);
+    }
+  }
+
+  // 10) Persist the chunks. Each chunk becomes one row in the `chunks` table,
+  //     now carrying its `section_index` so the lesson page can fetch a single
+  //     section's chunks with one WHERE clause.
+  //     The `embedding` column is vector(1536). We store a zero vector now as a
+  //     placeholder — the shape is correct so the column accepts it, and real
+  //     embeddings can be back-filled later without a schema change. pgvector
+  //     reads the vector from PostgREST as a bracketed comma-separated string.
   const zeroVector = `[${new Array(1536).fill(0).join(",")}]`;
-  const rows = chunks.map((content) => ({
+  const rows = chunks.map((content, i) => ({
     user_id: user.id,
     source_name: file.name,
     content,
     embedding: zeroVector,
+    section_index: chunkSectionIndex[i],
   }));
 
   const { error: insertError } = await supabase.from("chunks").insert(rows);
@@ -201,5 +363,18 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ count: chunks.length });
+  // 11) Save the section roadmap. Non-fatal: the chunks are already saved (each
+  //     tagged with its section_index), so a failure here just means the
+  //     dashboard falls back to the flat card for this source until re-mapped.
+  if (sections.length > 0) {
+    const { error: sourcesError } = await supabase.from("sources").upsert(
+      { user_id: user.id, source_name: file.name, sections },
+      { onConflict: "user_id,source_name" },
+    );
+    if (sourcesError) {
+      console.error("[upload] sources upsert error (roadmap not saved):", sourcesError);
+    }
+  }
+
+  return NextResponse.json({ count: chunks.length, sections });
 }

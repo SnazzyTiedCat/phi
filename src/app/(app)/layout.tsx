@@ -1,7 +1,10 @@
-import Link from "next/link";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import BackButton from "./BackButton";
+import { SidebarProvider } from "@/contexts/SidebarContext";
+import { FontProvider } from "@/contexts/FontContext";
+import SidebarToggle from "@/components/SidebarToggle";
+import Sidebar, { type SidebarSource } from "@/components/Sidebar";
 import PageTransition from "./PageTransition";
 
 /**
@@ -38,50 +41,116 @@ export default async function AppLayout({
     redirect("/login");
   }
 
+  // ── Sidebar material list ───────────────────────────────────────────────────
+  // The sidebar shows on every authenticated page, so the shell fetches the
+  // user's uploads here (once) and passes them to the client Sidebar. Same shape
+  // as the dashboard: each upload is many `chunks` rows sharing a source_name, so
+  // we dedupe to one entry per name, newest-first. Older rows may store an
+  // URL-encoded name while chunks store the raw filename — normalise both sides
+  // so cross-table matching is reliable (decodeURIComponent throws on a lone "%",
+  // hence the try/catch fallback).
+  const normalise = (s: string) => {
+    try {
+      return decodeURIComponent(s);
+    } catch {
+      return s;
+    }
+  };
+
+  const { data: chunkRows } = await supabase
+    .from("chunks")
+    .select("source_name, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  const seen = new Set<string>();
+  const orderedNames: string[] = [];
+  for (const row of chunkRows ?? []) {
+    const name = normalise(row.source_name);
+    if (!seen.has(name)) {
+      seen.add(name);
+      orderedNames.push(name);
+    }
+  }
+
+  // Which uploads were mapped into sections — those route to their first section
+  // rather than a flat lesson — and their optional friendly title (set by the
+  // rename action). `display_title` is nullable: only renamed materials have one.
+  const { data: sourceRows } = await supabase
+    .from("sources")
+    .select("source_name, sections, display_title")
+    .eq("user_id", user.id);
+
+  const sectionedNames = new Set<string>();
+  const titleByName = new Map<string, string>();
+  for (const row of sourceRows ?? []) {
+    const name = normalise(row.source_name);
+    const sections = (row.sections ?? []) as unknown[];
+    if (sections.length > 0) sectionedNames.add(name);
+    if (typeof row.display_title === "string" && row.display_title.trim()) {
+      titleByName.set(name, row.display_title.trim());
+    }
+  }
+
+  // The list label is the renamed title when one exists, else the filename. The
+  // icon defaults to φ (rendered inside the Sidebar). `name` stays the raw
+  // source_name — it's the stable key/URL, never the display string.
+  const sidebarSources: SidebarSource[] = orderedNames.map((name) => ({
+    name,
+    title: titleByName.get(name) ?? name,
+    hasSections: sectionedNames.has(name),
+  }));
+
   return (
-    <div className="flex min-h-screen flex-col bg-background text-text">
-      {/* Top navigation — minimal, restrained, matches the Arc/Dia energy from
-          the rest of the app. Sticky so it stays put as content scrolls. The
-          subtle bottom border + backdrop-blur keeps it visually separate from
-          the page without a heavy bar. */}
-      <header className="sticky top-0 z-10 border-b border-white/[0.06] bg-background/80 backdrop-blur-sm">
-        <nav className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-6">
-          {/* Left: the φ mark that melts into a back button on hover. Extracted
-              into a Client Component because it now navigates with router.back()
-              (real browser-history back), which the server can't do. */}
-          <BackButton />
+    <SidebarProvider>
+      <div className="relative flex min-h-screen flex-col bg-background text-text">
+        {/* Atmospheric orbs (Spades DESIGN.md §2.7) — a gold orb drifting
+            top-right and a faint white one static bottom-left. Fixed and behind
+            the content (z-0); they paint above the layout's solid background, so
+            the root layout's marketing orbs stay occluded here (no doubling)
+            while these give the authenticated app its own warm depth.
+            pointer-events-none and aria-hidden — purely decorative. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+        >
+          <div
+            className="animate-orb-drift absolute -right-[10%] -top-[20%] h-[60vw] w-[60vw] rounded-full"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 65%)",
+            }}
+          />
+          <div
+            className="absolute -bottom-[20%] -left-[10%] h-[50vw] w-[50vw] rounded-full"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(255,255,255,0.007) 0%, transparent 65%)",
+            }}
+          />
+        </div>
 
-          {/* Right: settings entry, now just the ⚙ gear. With the visible
-              "Settings" label gone, the Link carries an aria-label so screen
-              readers still announce it (the glyph stays aria-hidden). On hover a
-              small tooltip fades in to the LEFT of the icon: `group` on the Link
-              drives the fade, `relative` anchors the absolutely-positioned
-              tooltip (`right-full mr-2` sits it just left of the gear, `top-1/2
-              -translate-y-1/2` centres it vertically), and `pointer-events-none`
-              stops the tooltip from eating the click. */}
-          <Link
-            href="/settings"
-            aria-label="Settings"
-            className="group relative flex items-center leading-none text-2xl text-muted transition-colors hover:text-text"
-          >
-            <span aria-hidden="true">⚙</span>
-            <span
-              role="tooltip"
-              className="pointer-events-none absolute right-full top-1/2 mr-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-surface px-2 py-1 text-xs text-text opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-            >
-              Settings
-            </span>
-          </Link>
-        </nav>
-      </header>
+        {/* App shell: a single floating glass toggle in the top-left corner and
+            the slide-in Sidebar drawer it controls (both read the shared
+            SidebarProvider state). The drawer is wrapped in Suspense because it
+            reads the URL's ?source= via useSearchParams to highlight the active
+            material. */}
+        <SidebarToggle />
+        <Suspense fallback={null}>
+          <Sidebar sources={sidebarSources} />
+        </Suspense>
 
-      {/* Page content. flex-1 lets a page grow to fill the viewport height.
-          PageTransition fades each route in — and, because it's keyed on the
-          pathname, replays that fade on every navigation (a persistent server
-          layout otherwise animates only once). */}
-      <main className="flex-1">
-        <PageTransition>{children}</PageTransition>
-      </main>
-    </div>
+        {/* Page content. flex-1 lets a page grow to fill the viewport height;
+            relative z-10 lifts it above the atmospheric orbs. No top padding —
+            content starts at the top of the viewport and the toggle floats over
+            it. PageTransition fades each route in, keyed on the pathname so the
+            fade replays on every navigation. */}
+        <main className="relative z-10 flex-1">
+          <FontProvider>
+            <PageTransition>{children}</PageTransition>
+          </FontProvider>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }

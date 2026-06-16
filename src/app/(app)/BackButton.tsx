@@ -37,15 +37,9 @@ export default function BackButton() {
       >
         ‹
       </span>
-      {/* "Back" tooltip — slides in from the left on hover, same pattern as the
-          gear's tooltip. Labelled "Back" (not "Dashboard") because this now pops
-          history to wherever the student came from. */}
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute right-full top-1/2 mr-2 -translate-x-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-surface px-2 py-1 text-xs text-text opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100"
-      >
-        Back
-      </span>
+      {/* The hover label now comes from the <Tooltip> wrapper in the layout
+          (side="right"), so the old hardcoded left-side tooltip is gone — it was
+          the one that clipped off the pill's left edge. */}
     </button>
   );
 }

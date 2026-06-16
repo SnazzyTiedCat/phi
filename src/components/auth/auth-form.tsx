@@ -58,7 +58,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   return (
     <div className="relative w-full max-w-sm">
       {/* Card */}
-      <div className="rounded-2xl border border-white/[0.06] bg-surface/80 p-8 backdrop-blur-sm">
+      <div className="glass-standard shadow-card rounded-[24px] p-8">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold tracking-tight text-text">
             {isSignup ? "Create your account" : "Welcome back"}
@@ -123,7 +123,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-medium text-background transition-all duration-300 hover:bg-[#e2bb68] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none"
           >
             {loading
               ? isSignup

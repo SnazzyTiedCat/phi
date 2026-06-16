@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+
+# local Claude Code worktrees (separate checkouts, not repo content)
+/.claude/worktrees/

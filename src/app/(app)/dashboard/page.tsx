@@ -3,6 +3,17 @@ import { createClient } from "@/lib/supabase/server";
 import { greetingForHour } from "@/lib/greeting";
 import Greeting from "./Greeting";
 
+// One section of a mapped source, as stored in `sources.sections` (jsonb). The
+// dashboard reads `index`/`title` to render the roadmap pills; the chunk-range
+// fields aren't needed here (the lesson page filters by section_index instead).
+type Section = {
+  index: number;
+  title: string;
+  description: string;
+  start_chunk: number;
+  end_chunk: number;
+};
+
 /**
  * The dashboard — the first thing a student sees after logging in.
  *
@@ -60,31 +71,53 @@ export default async function DashboardPage() {
 
   const hasSources = sources.length > 0;
 
-  // ── Fetch which sources already have a cached lesson ──────────────────────
-  // A lesson row exists once /api/lesson generates and saves one. We use this
-  // to show "Continue learning" (gold) vs "Start learning" (muted) per card.
-  const { data: lessonRows } = await supabase
-    .from("lessons")
-    .select("source_name")
-    .eq("user_id", user?.id ?? "");
-
-  // Normalise source_names on both sides before comparing. The lessons table
-  // may have been written before the decodeURIComponent fix in the API route,
-  // meaning some rows have encoded names ("my%20notes.pdf") while the chunks
-  // table always stores the raw filename ("my notes.pdf"). Decoding both sides
-  // makes the Set lookup reliable regardless of what was previously stored.
+  // Normalise source_names before comparing across tables. Older rows may have
+  // been written before the decodeURIComponent fix in the API routes, so some
+  // carry encoded names ("my%20notes.pdf") while chunks always store the raw
+  // filename ("my notes.pdf"). Decoding both sides makes lookups reliable.
   // decodeURIComponent throws on malformed sequences (e.g. a lone "%") so we
   // catch and fall back to the original string.
   function normalise(s: string) {
     try { return decodeURIComponent(s); } catch { return s; }
   }
 
+  // ── Fetch the section roadmap for each source ─────────────────────────────
+  // `sources` rows are written by /api/upload when mapping succeeds. Not every
+  // file has one: older uploads (pre-sectioning) and uploads where mapping was
+  // skipped/failed have no row — those fall back to a flat card below. We key
+  // the map by the normalised filename so it matches the chunks-derived list.
+  const { data: sourceRows } = await supabase
+    .from("sources")
+    .select("source_name, sections, display_title")
+    .eq("user_id", user?.id ?? "");
+
+  const sectionsBySource = new Map<string, Section[]>();
+  // Friendly titles set by the rename action. Nullable: only renamed materials
+  // have one. Card headings fall back to the filename when absent.
+  const titleBySource = new Map<string, string>();
+  for (const row of sourceRows ?? []) {
+    const name = normalise(row.source_name);
+    sectionsBySource.set(name, (row.sections ?? []) as Section[]);
+    if (typeof row.display_title === "string" && row.display_title.trim()) {
+      titleBySource.set(name, row.display_title.trim());
+    }
+  }
+
+  // ── Fetch which lessons are already cached ────────────────────────────────
+  // A lesson row exists once /api/lesson generates and saves one. Section
+  // lessons are keyed `<source>_section_<index>` (see the lesson route), so this
+  // Set holds BOTH whole-document keys (legacy/flat cards) and per-section keys.
+  // We test membership with the matching key shape in each branch below.
+  const { data: lessonRows } = await supabase
+    .from("lessons")
+    .select("source_name")
+    .eq("user_id", user?.id ?? "");
+
   const cachedSources = new Set(
     (lessonRows ?? []).map((row: { source_name: string }) => normalise(row.source_name)),
   );
 
-  // Normalise the sources array too, so the has() comparison is always
-  // decoded-vs-decoded.
+  // Normalise the sources array too, so every comparison is decoded-vs-decoded.
   const normalisedSources = sources.map(normalise);
 
   // ── Time-of-day greeting (server fallback) ────────────────────────────────
@@ -125,9 +158,9 @@ export default async function DashboardPage() {
             being squeezed when the greeting is long. */}
         <Link
           href="/upload"
-          className="inline-flex shrink-0 items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-300 hover:bg-[#e2bb68] hover:scale-[1.03] active:scale-[0.98]"
+          className="inline-flex shrink-0 items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
         >
-          Upload material
+          Upload Material
         </Link>
       </div>
 
@@ -137,49 +170,119 @@ export default async function DashboardPage() {
            1 column on mobile, 2 on small screens, 3 on large — so cards stay a
            comfortable width instead of stretching edge-to-edge. */
         <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {normalisedSources.map((source) => (
-            /* The whole card is the link — a larger, more forgiving click
-               target than a small button, and the natural mental model is
-               "tap the subject to open it." Solid border (vs. the dashed
-               empty-state border) signals real, filled content. The hover
-               lift + border brighten is the same micro-interaction language as
-               the primary buttons. `key` is the source_name, which is unique
-               here because we de-duplicated above. */
-            <Link
-              key={source}
-              href={`/lesson?source=${encodeURIComponent(source)}`}
-              className="group flex cursor-pointer flex-col rounded-2xl border border-white/10 bg-surface/40 p-5 transition-all duration-200 hover:border-white/20 hover:bg-white/5 hover:-translate-y-0.5"
-            >
-              {/* Gold φ icon. `aria-hidden` because it's decorative — the
-                  filename below already names the card for screen readers. */}
-              <span
-                aria-hidden="true"
-                className="text-2xl font-extralight leading-none text-accent"
-              >
-                φ
-              </span>
+          {normalisedSources.map((source) => {
+            const sections = sectionsBySource.get(source) ?? [];
+            // Card heading: the renamed title when set, else the filename. The
+            // URL still uses the raw `source` key — only the label changes.
+            const label = titleBySource.get(source) ?? source;
 
-              {/* Filename = card title. `break-words` so a long filename wraps
-                  inside the card instead of overflowing it. */}
-              <h2 className="mt-4 break-words text-base font-medium text-text">
-                {source}
-              </h2>
+            // ── Flat fallback card ──────────────────────────────────────────
+            // No section roadmap (old upload, or mapping was skipped/failed).
+            // Keep the original behaviour: the WHOLE card is one link, and the
+            // CTA reflects whether the whole-document lesson is cached.
+            if (sections.length === 0) {
+              const cached = cachedSources.has(source);
+              return (
+                <Link
+                  key={source}
+                  href={`/lesson?source=${encodeURIComponent(source)}`}
+                  className="group glass-standard shadow-card flex cursor-pointer flex-col rounded-2xl p-5 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-2 hover:shadow-2xl"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="text-2xl font-extralight leading-none text-accent"
+                  >
+                    φ
+                  </span>
 
-              {/* The call to action. Gold = lesson already cached ("come back"),
-                  muted = not generated yet ("start here"). It's text, not a
-                  nested button — the parent <Link> is the interactive element. */}
-              <span
-                className={`mt-6 inline-flex items-center text-sm font-medium transition-colors ${
-                  cachedSources.has(source) ? "text-accent" : "text-muted"
-                }`}
+                  <h2 className="mt-4 break-words text-base font-medium text-text">
+                    {label}
+                  </h2>
+
+                  <span
+                    className={`mt-6 inline-flex items-center text-sm font-medium transition-colors ${
+                      cached ? "text-accent" : "text-muted"
+                    }`}
+                  >
+                    {cached ? "Continue learning" : "Start learning"}
+                    <span className="ml-1 transition-transform duration-300 group-hover:translate-x-1">
+                      →
+                    </span>
+                  </span>
+                </Link>
+              );
+            }
+
+            // ── Roadmap card ────────────────────────────────────────────────
+            // A mapped source. The card is a <div> (not a <Link>) because it
+            // contains several links — the header CTA plus one per section —
+            // and nesting <a> inside <a> is invalid HTML. A section is
+            // "completed" when its per-section lesson is cached; the card CTA
+            // reads "Continue" if ANY section has been studied.
+            const anyCached = sections.some((s) =>
+              cachedSources.has(`${source}_section_${s.index}`),
+            );
+
+            return (
+              <div
+                key={source}
+                className="glass-standard shadow-card flex flex-col rounded-2xl p-5 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-2 hover:shadow-2xl"
               >
-                {cachedSources.has(source) ? "Continue learning" : "Start learning"}
-                <span className="ml-1 transition-transform duration-300 group-hover:translate-x-1">
-                  →
+                <span
+                  aria-hidden="true"
+                  className="text-2xl font-extralight leading-none text-accent"
+                >
+                  φ
                 </span>
-              </span>
-            </Link>
-          ))}
+
+                <h2 className="mt-4 break-words text-base font-medium text-text">
+                  {label}
+                </h2>
+
+                {/* Card CTA → opens the first section. Links (not the whole
+                    card) are the interactive elements here. */}
+                <Link
+                  href={`/lesson?source=${encodeURIComponent(source)}&section=0`}
+                  className={`group mt-4 inline-flex w-fit items-center text-sm font-medium transition-colors ${
+                    anyCached ? "text-accent" : "text-muted hover:text-text"
+                  }`}
+                >
+                  {anyCached ? "Continue learning" : "Start learning"}
+                  <span className="ml-1 transition-transform duration-300 group-hover:translate-x-1">
+                    →
+                  </span>
+                </Link>
+
+                {/* Section pills — the roadmap. Each links into its section;
+                    a gold dot marks sections whose lesson is already cached.
+                    Titles truncate to 20 chars (full title in the tooltip) so
+                    the pills stay compact; they wrap rather than overflow. */}
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {sections.map((s) => {
+                    const done = cachedSources.has(`${source}_section_${s.index}`);
+                    const label =
+                      s.title.length > 20 ? `${s.title.slice(0, 20)}…` : s.title;
+                    return (
+                      <Link
+                        key={s.index}
+                        href={`/lesson?source=${encodeURIComponent(source)}&section=${s.index}`}
+                        title={s.title}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.02] px-3 py-1 text-xs text-muted transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-accent/50 hover:text-accent active:scale-95"
+                      >
+                        {done && (
+                          <span
+                            aria-hidden="true"
+                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
+                          />
+                        )}
+                        <span className="truncate">{label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         /* ── Empty state ───────────────────────────────────────────────────
@@ -195,9 +298,9 @@ export default async function DashboardPage() {
 
           <Link
             href="/upload"
-            className="mt-6 inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-300 hover:bg-[#e2bb68] hover:scale-[1.03] active:scale-[0.98]"
+            className="mt-6 inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
           >
-            Upload material
+            Upload Material
           </Link>
         </div>
       )}

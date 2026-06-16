@@ -10,7 +10,7 @@ Phi is an AI-powered academic learning platform for students. Not a research ass
 
 **Core philosophy:** AI augments human intelligence. It does not replace thinking. Phi makes students better learners, not dependent ones.
 
-**The one-line pitch:** Upload your notes. Phi teaches you.
+**The one-line pitch:** AI that actually teaches you.
 
 -----
 
@@ -57,14 +57,14 @@ Phi’s real moat: **it’s deep where NotebookLM is wide.** Phi does one thing 
 Ship exactly this. Nothing more.
 
 - [x] ✅ Auth (sign up / log in via Supabase)
-- [x] ✅ Settings page — API key storage in localStorage (Anthropic + ElevenLabs)
+- [x] ✅ Account page (formerly Settings) — API key storage in localStorage (Anthropic only)
 - [x] ✅ File upload (PDF / text)
 - [ ] 🚧 RAG pipeline — chunk, embed, store in pgvector (chunking done; real embeddings + pgvector search not yet wired up)
 - [x] ✅ Lesson structuring — AI breaks content into titled lessons on upload
-- [x] ✅ Lesson view — AI teaches the content, ElevenLabs reads aloud
+- [x] ✅ Lesson view — AI teaches the content, read aloud via the browser Web Speech API
 - [x] ✅ Chat sidebar — pause, explain simply, skip ahead
 - [x] ✅ Flashcards generated from lesson content
-- [ ] 🚧 Basic quiz (in progress — not yet built)
+- [x] ✅ Basic quiz
 
 **Exit condition:** A student can upload their data science textbook, get structured lessons, read along with audio, ask the chat questions mid-lesson, and get flashcards at the end.
 
@@ -72,39 +72,64 @@ Ship exactly this. Nothing more.
 
 ## Current State
 
-What has actually been built and is running as of June 2026.
+What has actually been built and is running. Beyond the locked MVP, the app has had three large passes since: a full **Spades design system** (see `DESIGN.md`), a **sidebar app shell**, and a consolidated **Account page**. Engineering conventions for working in the codebase live in `AGENTS.md`.
+
+**App shell** — every authenticated page lives in the `(app)` route group, wrapped in a sidebar shell that replaced the old top navbar:
+
+- A floating glass **φ toggle** (fixed, top-left): φ → menu icon on hover, ✕ when open.
+- A slide-in **Sidebar** drawer: Account (top), a gold "Upload Material" button, a scrollable list of the student's materials (fetched server-side in the layout), and the Phi wordmark (footer). A material opens its lesson; a ⋮ menu's Edit/Delete both open the **MaterialEditPanel** (a right-edge slide-in: rename at the top, delete-confirm at the bottom).
 
 **Routes live**
 
 | Route | Status | Notes |
 |---|---|---|
+| `/` | Done | Marketing landing page — full-viewport scroll-snap sections, pagination rail, Spades design |
 | `/login`, `/signup` | Done | Supabase SSR auth; redirects to `/dashboard` on success |
-| `/dashboard` | Done | Source grid; "Continue learning" vs "Start learning" based on cached lesson |
-| `/upload` | Done | PDF + .txt upload; disclaimer and next-step hint |
-| `/lesson?source=<name>` | Done | Server fetches chunks → `LessonView` (client) generates + renders lesson |
-| `/settings` | Done | Anthropic API key only — ElevenLabs field removed |
+| `/dashboard` | Done | Source grid; mapped sources show a section roadmap; "Continue" vs "Start" from cached lessons |
+| `/upload` | Done | PDF + .txt upload; multi-step progress |
+| `/lesson?source=<name>&section=<n>` | Done | Server fetches chunks → `LessonView` (client) generates + renders; supports per-section lessons |
+| `/account` | Done | The single settings surface (see below). Replaces `/settings` |
+| `/settings` | Redirect | Server redirect → `/account` (legacy bookmarks + in-app links) |
+
+**The Account page** (`/account`) — five `glass-standard` cards:
+
+- **API Key** — Anthropic key in localStorage (`phi_anthropic_key`)
+- **Appearance** — Reading-font toggle: Space Mono / Inter (`phi_font_preference`)
+- **Tutor** — Explanation depth: Concise / Standard / Thorough (`phi_explanation_depth`). The first seed of the V2 tutor-persona system; threaded into the lesson + chat system prompts
+- **Memory & Data** — informational
+- **Account** — email/password change, sign out, delete account (typed-`DELETE` confirmation modal)
 
 **API routes live**
 
 | Endpoint | Status | Notes |
 |---|---|---|
-| `POST /api/upload` | Done | `unpdf` for PDFs; ~500-token chunks; stored in Supabase with zero-vector placeholder embeddings |
-| `POST /api/lesson` | Done | Claude `claude-opus-4-7`; cached to `lessons` table; subsequent visits return instantly |
-| `POST /api/chat` | Done | RAG from chunks table; streamed reply via `text/plain`; full conversation history |
-| `GET /api/flashcards` | Done | Cache-only read; no Claude call |
-| `POST /api/flashcards` | Done | Claude `claude-sonnet-4-6`; cached to `flashcards` table |
+| `POST /api/upload` | Done | `unpdf` for PDFs; ~500-token chunks; zero-vector placeholder embeddings |
+| `POST /api/lesson` | Done | Claude `claude-opus-4-7`; cached to `lessons`; accepts `depth`. Serves cache without a key; returns `{ needsKey }` on a miss |
+| `POST /api/chat` | Done | RAG from chunks; streamed reply via `text/plain`; accepts `depth` |
+| `GET` / `POST /api/flashcards` | Done | GET cache-only; POST Claude `claude-sonnet-4-6` → `flashcards`. Key required only on a cache miss |
+| `GET` / `POST /api/quiz` | Done | Multiple-choice **and** short-answer questions (configurable count + types) → `quizzes`. Key required only on a miss |
+| `POST /api/grade` | Done | Live (uncached) short-answer grading via Claude Haiku — YES/NO meaning-match vs. the question's `sample_answer` |
+| `POST /api/material/rename` | Done | Writes `sources.display_title` (needs the column — see `supabase/display_title.sql`); `source_name` stays the stable key |
+| `POST /api/material/delete` | Done | User-scoped cascade across `chunks`/`sources`/`lessons`/`flashcards`/`quizzes`; cookie client, not service-role |
+| `POST /api/account/delete` | Done | Service-role (`SUPABASE_SERVICE_ROLE_KEY`); verifies session, deletes the user; cascading FKs remove their data |
 
-**Features in the lesson view**
+**Lesson view features**
 
-- Read-aloud via browser Web Speech API (no key, no dependency) — play/pause/stop with markdown stripping
-- Chat sidebar with real-time streaming and auto-scroll
-- Flip-card flashcards with 3D CSS rotation; generate-on-demand then cached per source
-- Floating action bar toggles: flashcards panel, read-aloud, chat sidebar
+- Read-aloud via the browser **Web Speech API** (no key, no dependency) — play/pause/stop with markdown stripping
+- RAG chat sidebar with real-time streaming + auto-scroll (renders markdown replies)
+- Flip-card flashcards (3D CSS) with an expand modal for long cards; generate-on-demand, cached per source
+- Floating action bar: flashcards, quiz, read-aloud, chat toggles
+
+**Design system** (`DESIGN.md`)
+
+- **Space Mono** everywhere by default (optional **Inter** reading font); near-black base + a single gold accent (`#d4a74a`)
+- Glass surfaces (`glass-standard` / `glass-subtle`), layered `shadow-card`, atmospheric orbs, standardized expo-curve motion
+- Tailwind **v4** — theme tokens in `globals.css @theme` (there is **no** `tailwind.config`); custom `@keyframes` (no `tailwindcss-animate`)
 
 **Not yet built**
 
-- Quiz (listed in MVP scope; no route or UI exists yet)
 - Real vector embeddings (zero-vector placeholders stored; pgvector similarity search not wired up)
+- ElevenLabs / OpenAI TTS (still Web Speech), chat-history persistence, Supabase-side API-key storage
 
 -----
 
@@ -122,7 +147,6 @@ Everything below goes here. Not in the codebase. Not in a branch. Here.
 - ElevenLabs TTS integration (human-quality voice; replaces Web Speech API)
 - OpenAI TTS as an ElevenLabs alternative
 - Chat history persistence (currently in-memory only; lost on page reload)
-- Quiz generation
 
 -----
 
@@ -131,7 +155,7 @@ Everything below goes here. Not in the codebase. Not in a branch. Here.
 |Layer                        |Tool                            |Why                                                               |
 |-----------------------------|--------------------------------|------------------------------------------------------------------|
 |Frontend + Backend           |Next.js (App Router, TypeScript)|React + API routes in one, App Router is modern standard          |
-|Styling                      |Tailwind CSS only               |No Framer Motion — Tailwind animations are enough for MVP         |
+|Styling                      |Tailwind CSS v4 (Spades system) |Theme tokens in `globals.css @theme` (no config file); glass surfaces, Space Mono / optional Inter, custom `@keyframes` — no animation libraries. See `DESIGN.md` / `AGENTS.md`|
 |Auth + DB + Storage + Vectors|Supabase                        |One service covers auth, file storage, relational DB, and pgvector|
 |AI tutor engine              |Anthropic Claude API            |Lesson structuring, chat, flashcards, quiz generation             |
 |Read-aloud                   |Browser Web Speech API (MVP) / ElevenLabs (V2)|Zero-dependency, keyless TTS built into every modern browser; ElevenLabs deferred to V2 for human-quality voice|
@@ -155,7 +179,7 @@ Vectors stored in Supabase pgvector
         ↓
 Claude structures content into titled lessons
         ↓
-Lesson view loads — ElevenLabs reads aloud
+Lesson view loads — read aloud via the browser Web Speech API
         ↓
 Chat sidebar answers questions via RAG (retrieves relevant chunks, injects into prompt)
         ↓
@@ -219,7 +243,7 @@ All three phrases mean stop and check against MVP scope.
 
 |Stage         |Approach                                                            |
 |--------------|--------------------------------------------------------------------|
-|MVP           |User-provided API keys (Anthropic + ElevenLabs) — free to use       |
+|MVP           |User-provided Anthropic API key — free to use                       |
 |Early traction|Apply for Anthropic startup credits, OpenAI for Startups            |
 |Growth        |Freemium — limited free tier, paid for more subjects / storage      |
 |Funded        |Handle API costs internally, pursue AI Grant / YC / Thiel Fellowship|
