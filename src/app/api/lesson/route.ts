@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { depthInstruction } from "@/lib/tutor-depth";
+import {
+  legacySectionLessonCacheKey,
+  lessonCacheKey,
+} from "@/lib/lesson-cache-key";
 
 /**
  * POST /api/lesson
@@ -120,14 +124,13 @@ export async function POST(request: Request) {
   const sourceKey = source;
 
   // 4b) Derive the cache key. Per-section lessons must NOT collide with the
-  //     whole-document lesson (or with each other), so a section lesson is keyed
-  //     by `<source>_section_<index>`. We reuse the existing `lessons` table and
-  //     its unique(user_id, source_name) constraint — the section just lives in
-  //     the source_name string. The dashboard reconstructs the exact same key to
-  //     detect which sections are completed.
-  const cacheSource = isSection
-    ? `${sourceKey}_section_${sectionIndex}`
-    : sourceKey;
+  //     whole-document lesson (or with each other), so a section lesson lives in
+  //     a reserved encoded namespace rather than being appended to the raw
+  //     filename. The dashboard and delete route use the same helper.
+  const cacheSource = lessonCacheKey(
+    sourceKey,
+    isSection ? sectionIndex : undefined,
+  );
 
   // 4a) Cache check. If we've already generated a lesson for this user + source,
   //     return it immediately — no Anthropic call, no token spend.
@@ -151,6 +154,40 @@ export async function POST(request: Request) {
   if (cached) {
     console.log("[lesson] Cache hit — returning stored lesson");
     return NextResponse.json({ lesson: cached.content });
+  }
+
+  // Compatibility with section lessons generated before the reserved cache
+  // namespace existed. We only read the legacy key when it cannot also be the
+  // exact filename of a real uploaded material; otherwise a source named
+  // `notes_section_0` could receive section 0 of `notes`.
+  if (isSection) {
+    const legacyCacheSource = legacySectionLessonCacheKey(sourceKey, sectionIndex!);
+    const { data: collidingSource, error: collidingSourceError } = await supabase
+      .from("chunks")
+      .select("source_name")
+      .eq("user_id", user.id)
+      .eq("source_name", legacyCacheSource)
+      .limit(1);
+
+    if (collidingSourceError) {
+      console.error("[lesson] legacy collision lookup error:", collidingSourceError);
+    } else if (!collidingSource || collidingSource.length === 0) {
+      const { data: legacyCached, error: legacyCacheError } = await supabase
+        .from("lessons")
+        .select("content")
+        .eq("user_id", user.id)
+        .eq("source_name", legacyCacheSource)
+        .maybeSingle();
+
+      if (legacyCacheError) {
+        console.error("[lesson] legacy cache lookup error:", legacyCacheError);
+      }
+
+      if (legacyCached) {
+        console.log("[lesson] Legacy cache hit — returning stored lesson");
+        return NextResponse.json({ lesson: legacyCached.content });
+      }
+    }
   }
 
   console.log("[lesson] Cache miss — generating new lesson");
@@ -237,8 +274,8 @@ export async function POST(request: Request) {
     // `.upsert` with `onConflict` handles the unique(user_id, source_name)
     // constraint — if two tabs race to generate the same lesson, the second
     // write just overwrites with an identical value.
-    // We store cacheSource (source key, plus the _section_N suffix when scoped) so
-    // it always matches the cache lookup above.
+    // We store cacheSource (exact source for whole-document lessons, reserved
+    // encoded key for section lessons) so it always matches the cache lookup.
     const { error: upsertError } = await supabase.from("lessons").upsert(
       { user_id: user.id, source_name: cacheSource, content: lesson },
       { onConflict: "user_id,source_name" },
