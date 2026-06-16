@@ -59,9 +59,14 @@ type Message = { role: "user" | "assistant"; content: string };
 type Flashcard = { front: string; back: string };
 
 // One quiz question — the exact shape /api/quiz returns and the QuizRunner
-// component (bottom of this file) renders. `correct` is the 0-based index into
-// `options` of the right answer.
-type QuizQuestion = { question: string; options: string[]; correct: number };
+// component (bottom of this file) renders. Two shapes, discriminated by `type`:
+//   - multiple_choice: `correct` is the 0-based index into `options`. Legacy
+//     cached questions have no `type` field, so it's optional and absence means
+//     multiple choice.
+//   - short_answer: free text, graded against `sample_answer` via /api/grade.
+type QuizQuestion =
+  | { question: string; type?: "multiple_choice"; options: string[]; correct: number }
+  | { question: string; type: "short_answer"; sample_answer: string };
 
 export default function LessonView({
   chunks,
@@ -114,19 +119,16 @@ export default function LessonView({
     // callback itself cannot be `async` (it must return either nothing or a
     // cleanup function, not a Promise).
     async function generate() {
-      // 1) Read the key from localStorage. This is safe here because the effect
-      //    only runs in the browser (effects never run during server render).
+      // Read the key from localStorage (may be null — that's fine here). We send
+      // it regardless: /api/lesson checks its cache server-side FIRST and returns
+      // a stored lesson with NO key required. The key only matters on a cache
+      // miss, when generation actually has to happen. This is what lets a
+      // returning student re-open a lesson they've already generated even if they
+      // never saved (or have since cleared) their key.
       const apiKey = localStorage.getItem("phi_anthropic_key");
 
-      // 2) No key (null) or empty string → can't call the API. Switch to the
-      //    "no-key" state, which renders the "add your key in Settings" prompt.
-      if (!apiKey) {
-        setStatus("no-key");
-        return;
-      }
-
-      // 3) Key exists → request the lesson. Forward the student's explanation-
-      //    depth setting (Tutor) so the prompt can shape the teaching voice.
+      // Forward the student's explanation-depth setting (Tutor) so the prompt can
+      // shape the teaching voice on a fresh generation.
       const depth = localStorage.getItem(EXPLANATION_DEPTH_KEY);
       try {
         const res = await fetch("/api/lesson", {
@@ -142,7 +144,16 @@ export default function LessonView({
           }),
         });
 
-        const data: { lesson?: string; error?: string } = await res.json();
+        const data: { lesson?: string; error?: string; needsKey?: boolean } =
+          await res.json();
+
+        // Cache miss AND no key on file → the route signals `needsKey` so we can
+        // show the "add your key in Account" prompt. This is the ONLY path to the
+        // no-key state now: a cache hit returns the lesson above, key or not.
+        if (data.needsKey) {
+          setStatus("no-key");
+          return;
+        }
 
         if (!res.ok) {
           // The route handler always sends `{ error }` on failure. Fall back to
@@ -209,6 +220,13 @@ export default function LessonView({
   const [quiz, setQuiz] = useState<QuizQuestion[] | null>(null);
   const [isQuizLoading, setIsQuizLoading] = useState(false);
   const [quizError, setQuizError] = useState("");
+  // Quiz config (the step shown before generating). Question count is 3–10
+  // (default 5); the two question types are independent toggles, MC on by default.
+  const [quizCount, setQuizCount] = useState(5);
+  const [quizTypes, setQuizTypes] = useState({
+    multiple_choice: true,
+    short_answer: false,
+  });
 
   // ── Floating action bar toggles ────────────────────────────────────────--
   // Whether the flashcards panel is shown. Toggled by the floating bar's grid
@@ -267,7 +285,7 @@ export default function LessonView({
 
     const apiKey = localStorage.getItem("phi_anthropic_key");
     if (!apiKey) {
-      setFlashcardsError("Add your Anthropic API key in Settings to generate flashcards.");
+      setFlashcardsError("Add your Anthropic API key in Account to generate flashcards.");
       return;
     }
 
@@ -325,7 +343,17 @@ export default function LessonView({
 
     const apiKey = localStorage.getItem("phi_anthropic_key");
     if (!apiKey) {
-      setQuizError("Add your Anthropic API key in Settings to generate a quiz.");
+      setQuizError("Add your Anthropic API key in Account to generate a quiz.");
+      return;
+    }
+
+    // Collapse the type toggles into the array the route expects. At least one
+    // type must be on, or there's nothing to generate.
+    const types = Object.entries(quizTypes)
+      .filter(([, on]) => on)
+      .map(([type]) => type);
+    if (types.length === 0) {
+      setQuizError("Pick at least one question type.");
       return;
     }
 
@@ -335,7 +363,7 @@ export default function LessonView({
       const res = await fetch("/api/quiz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, apiKey }),
+        body: JSON.stringify({ source, apiKey, count: quizCount, types }),
       });
       const data: { questions?: QuizQuestion[]; error?: string } = await res.json();
       if (!res.ok) {
@@ -555,10 +583,10 @@ export default function LessonView({
         <p className="mt-6 text-sm text-muted">
           Add your Anthropic API key in{" "}
           <Link
-            href="/settings"
+            href="/account"
             className="font-medium text-accent underline-offset-4 hover:underline"
           >
-            Settings
+            Account
           </Link>{" "}
           to start learning
         </p>
@@ -723,29 +751,15 @@ export default function LessonView({
                 <QuizRunner questions={quiz} />
               </>
             ) : (
-              <div className="flex flex-col items-center gap-2 py-8">
-                <button
-                  type="button"
-                  onClick={generateQuiz}
-                  disabled={isQuizLoading}
-                  className="
-                    flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-5 py-2.5
-                    text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95
-                    disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none
-                  "
-                >
-                  {isQuizLoading ? (
-                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    "Generate quiz"
-                  )}
-                </button>
-                {quizError && (
-                  <p role="alert" className="text-xs text-red-400">
-                    {quizError}
-                  </p>
-                )}
-              </div>
+              <QuizConfig
+                count={quizCount}
+                setCount={setQuizCount}
+                types={quizTypes}
+                setTypes={setQuizTypes}
+                onGenerate={generateQuiz}
+                isLoading={isQuizLoading}
+                error={quizError}
+              />
             )}
           </section>
           </SpringIn>
@@ -1269,31 +1283,204 @@ function FlipCard({ front, back }: Flashcard) {
   );
 }
 
+// ── QuizConfig ──────────────────────────────────────────────────────────────
+// The step shown before a quiz exists: choose how many questions (3–10) and
+// which types, then Generate. Replaces the old lone "Generate quiz" button. The
+// count/type state it edits is owned by LessonView (so generateQuiz can read it);
+// this component is just the form.
+type QuizTypeToggles = { multiple_choice: boolean; short_answer: boolean };
+
+function QuizConfig({
+  count,
+  setCount,
+  types,
+  setTypes,
+  onGenerate,
+  isLoading,
+  error,
+}: {
+  count: number;
+  setCount: (n: number) => void;
+  types: QuizTypeToggles;
+  setTypes: (t: QuizTypeToggles) => void;
+  onGenerate: () => void;
+  isLoading: boolean;
+  error: string;
+}) {
+  const MIN = 3;
+  const MAX = 10;
+
+  return (
+    <div className="mx-auto flex max-w-sm flex-col gap-6 py-8">
+      {/* Question-count stepper. Clamped to 3–10; the buttons disable at the
+          ends rather than wrapping. */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-text">Questions</span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setCount(Math.max(MIN, count - 1))}
+            disabled={count <= MIN}
+            aria-label="Fewer questions"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/10 text-text transition-colors hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            −
+          </button>
+          <span
+            aria-live="polite"
+            className="w-6 text-center text-sm tabular-nums text-text"
+          >
+            {count}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCount(Math.min(MAX, count + 1))}
+            disabled={count >= MAX}
+            aria-label="More questions"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/10 text-text transition-colors hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      {/* Question types — independent toggles. Real checkboxes for free
+          keyboard + screen-reader support; accent-color tints the check. */}
+      <div className="flex flex-col gap-3">
+        <span className="text-sm text-text">Question types</span>
+        <label className="flex cursor-pointer items-center gap-3 text-sm text-text">
+          <input
+            type="checkbox"
+            checked={types.multiple_choice}
+            onChange={() =>
+              setTypes({ ...types, multiple_choice: !types.multiple_choice })
+            }
+            className="h-4 w-4 cursor-pointer rounded border-white/20 bg-background accent-accent"
+          />
+          Multiple choice
+        </label>
+        <label className="flex cursor-pointer items-center gap-3 text-sm text-text">
+          <input
+            type="checkbox"
+            checked={types.short_answer}
+            onChange={() =>
+              setTypes({ ...types, short_answer: !types.short_answer })
+            }
+            className="h-4 w-4 cursor-pointer rounded border-white/20 bg-background accent-accent"
+          />
+          Short answer
+        </label>
+      </div>
+
+      <div className="flex flex-col items-center gap-2">
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={isLoading}
+          className="
+            flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-accent px-5 py-2.5
+            text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95
+            disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none
+          "
+        >
+          {isLoading ? (
+            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+          ) : (
+            "Generate quiz"
+          )}
+        </button>
+        {error && (
+          <p role="alert" className="text-xs text-red-400">
+            {error}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── QuizRunner ────────────────────────────────────────────────────────────────
-// Runs one quiz: shows a single question at a time, locks the options once the
-// student answers (revealing the correct one in green and a wrong pick in red),
-// tallies a score, and shows a results screen at the end with a retry. All quiz
-// progress lives in this component's own state, so it resets cleanly whenever the
-// panel remounts.
+// Runs one quiz: shows a single question at a time and tallies a score. Two
+// question types:
+//   - multiple choice → lock the options on click (correct in green, a wrong
+//     pick in red), score on selection.
+//   - short answer → a text box; on submit /api/grade asks Claude whether the
+//     answer means the same as the model answer, which drives correct/incorrect
+//     and reveals the model answer.
+// All quiz progress lives in this component's own state, so it resets cleanly
+// whenever the panel remounts.
 function QuizRunner({ questions }: { questions: QuizQuestion[] }) {
   const [current, setCurrent] = useState(0); // index of the question on screen
-  const [selected, setSelected] = useState<number | null>(null); // this Q's pick
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
 
-  const question = questions[current];
-  const answered = selected !== null;
-  const isLast = current === questions.length - 1;
+  // Multiple-choice state for the current question.
+  const [selected, setSelected] = useState<number | null>(null);
+  // Short-answer state for the current question.
+  const [saInput, setSaInput] = useState("");
+  const [saResult, setSaResult] = useState<boolean | null>(null);
+  const [isGrading, setIsGrading] = useState(false);
+  const [gradeError, setGradeError] = useState("");
 
-  // First click answers the question and locks it. We score on selection (not at
-  // the end) so we don't have to keep every answer around.
+  const question = questions[current];
+  const isLast = current === questions.length - 1;
+  // Whether the current question is locked, regardless of type. Drives the
+  // Next/Results button.
+  const answered =
+    question.type === "short_answer" ? saResult !== null : selected !== null;
+
+  // MC: first click answers and locks the question. We score on selection (not
+  // at the end) so we don't have to keep every answer around.
   function choose(i: number) {
-    if (answered) return;
+    if (question.type === "short_answer" || selected !== null) return;
     setSelected(i);
     if (i === question.correct) setScore((s) => s + 1);
   }
 
-  // Advance to the next question, or finish on the last one.
+  // SA: send the answer to /api/grade for a YES/NO meaning check. This is a live
+  // call (no cache) and needs the key — same as chat. The verdict locks the
+  // question and reveals the model answer.
+  async function submitShortAnswer() {
+    if (question.type !== "short_answer" || isGrading || saResult !== null) return;
+    const answer = saInput.trim();
+    if (answer.length === 0) return;
+
+    const apiKey = localStorage.getItem("phi_anthropic_key");
+    if (!apiKey) {
+      setGradeError("Add your Anthropic API key in Account to check answers.");
+      return;
+    }
+
+    setGradeError("");
+    setIsGrading(true);
+    try {
+      const res = await fetch("/api/grade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey,
+          question: question.question,
+          sampleAnswer: question.sample_answer,
+          studentAnswer: answer,
+        }),
+      });
+      const data: { correct?: boolean; error?: string } = await res.json();
+      if (!res.ok) {
+        setGradeError(data.error || "Could not check your answer. Please try again.");
+        return;
+      }
+      const correct = !!data.correct;
+      setSaResult(correct);
+      if (correct) setScore((s) => s + 1);
+    } catch {
+      setGradeError("Network error. Check your connection and try again.");
+    } finally {
+      setIsGrading(false);
+    }
+  }
+
+  // Advance to the next question, or finish on the last one. Resets every
+  // per-question field so the next one starts clean.
   function next() {
     if (isLast) {
       setFinished(true);
@@ -1301,13 +1488,19 @@ function QuizRunner({ questions }: { questions: QuizQuestion[] }) {
     }
     setCurrent((c) => c + 1);
     setSelected(null);
+    setSaInput("");
+    setSaResult(null);
+    setGradeError("");
   }
 
   function restart() {
     setCurrent(0);
-    setSelected(null);
     setScore(0);
     setFinished(false);
+    setSelected(null);
+    setSaInput("");
+    setSaResult(null);
+    setGradeError("");
   }
 
   // ── Results screen ──
@@ -1338,24 +1531,93 @@ function QuizRunner({ questions }: { questions: QuizQuestion[] }) {
       </p>
       <h3 className="mt-2 text-lg font-medium text-text">{question.question}</h3>
 
-      <div className="mt-5 space-y-3">
-        {question.options.map((option, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => choose(i)}
-            disabled={answered}
-            className={quizOptionClass(i, question.correct, selected, answered)}
-          >
-            {/* A/B/C/D badge. `border-current` makes it inherit the option's
-                state colour (green/red/muted) once answered. */}
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current text-xs">
-              {String.fromCharCode(65 + i)}
-            </span>
-            <span>{option}</span>
-          </button>
-        ))}
-      </div>
+      {question.type === "short_answer" ? (
+        // ── Short-answer question ──
+        <>
+          <textarea
+            value={saInput}
+            onChange={(e) => setSaInput(e.target.value)}
+            disabled={saResult !== null || isGrading}
+            rows={3}
+            placeholder="Type your answer…"
+            aria-label="Your answer"
+            className="
+              mt-5 w-full resize-none rounded-xl border border-white/10 bg-background px-4 py-3
+              text-sm leading-relaxed text-text placeholder:text-muted
+              focus:border-accent/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60
+            "
+          />
+
+          {saResult === null ? (
+            <div className="mt-4 flex flex-col items-end gap-2">
+              <button
+                type="button"
+                onClick={submitShortAnswer}
+                disabled={isGrading || saInput.trim().length === 0}
+                className="
+                  flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-5 py-2.5
+                  text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95
+                  disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none
+                "
+              >
+                {isGrading ? (
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  "Check answer"
+                )}
+              </button>
+              {gradeError && (
+                <p role="alert" className="text-xs text-red-400">
+                  {gradeError}
+                </p>
+              )}
+            </div>
+          ) : (
+            // Graded: verdict banner (green/red) + the model answer to compare.
+            <>
+              <div
+                className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+                  saResult
+                    ? "border-green-500/60 bg-green-500/10 text-green-300"
+                    : "border-red-500/60 bg-red-500/10 text-red-300"
+                }`}
+              >
+                {saResult
+                  ? "Correct — that matches the model answer."
+                  : "Not quite — compare with the model answer below."}
+              </div>
+              <div className="mt-3 rounded-xl border border-white/10 bg-background/40 p-4">
+                <span className="text-xs uppercase tracking-wide text-accent">
+                  Model answer
+                </span>
+                <p className="mt-1 text-sm leading-relaxed text-text">
+                  {question.sample_answer}
+                </p>
+              </div>
+            </>
+          )}
+        </>
+      ) : (
+        // ── Multiple-choice question ──
+        <div className="mt-5 space-y-3">
+          {question.options.map((option, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => choose(i)}
+              disabled={answered}
+              className={quizOptionClass(i, question.correct, selected, answered)}
+            >
+              {/* A/B/C/D badge. `border-current` makes it inherit the option's
+                  state colour (green/red/muted) once answered. */}
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current text-xs">
+                {String.fromCharCode(65 + i)}
+              </span>
+              <span>{option}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* The Next/Results button only appears once they've answered. */}
       {answered && (
