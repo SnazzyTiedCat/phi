@@ -96,11 +96,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  // 4) Normalise the source name, identical to /api/lesson: the URL may carry
-  //    percent-encoding or "+"-for-space, but the chunks table stores the plain
-  //    filename. Decoding once is idempotent for already-decoded strings and
-  //    fixes the mismatch when it's still encoded.
-  const normalisedSource = decodeURIComponent(source.replace(/\+/g, " "));
+  // 4) Keep the source_name exactly as the client sent it. It has already been
+  //    decoded by URLSearchParams / Next before it becomes a database key; doing
+  //    another decode here would mutate valid filenames and miss their chunks.
+  const sourceKey = source;
 
   // 5) Fetch the source's chunks (the RAG step). We only need `content`. We
   //    filter by user_id even though RLS already scopes rows — explicit intent
@@ -109,7 +108,7 @@ export async function POST(request: Request) {
     .from("chunks")
     .select("content")
     .eq("user_id", user.id)
-    .eq("source_name", normalisedSource);
+    .eq("source_name", sourceKey);
 
   if (chunksError) {
     console.error("[chat] chunk fetch error:", chunksError);

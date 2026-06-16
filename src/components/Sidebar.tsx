@@ -18,7 +18,7 @@ import MaterialEditPanel from "./MaterialEditPanel";
  * these from the user's uploads and passes them down.
  */
 export type SidebarSource = {
-  // The normalised source_name — used in the URL and as the React key.
+  // The exact source_name identity key — used in the URL and as the React key.
   name: string;
   // The list label. There's no display_title column yet, so this is the name.
   title: string;

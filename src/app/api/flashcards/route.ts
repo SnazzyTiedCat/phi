@@ -119,14 +119,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  // Normalise exactly like /api/lesson so the lookup key matches what we stored.
-  const normalisedSource = decodeURIComponent(source.replace(/\+/g, " "));
+  // Keep source_name opaque. `searchParams.get()` has already decoded the query
+  // string once; decoding again would turn valid identity characters into a
+  // different filename (or throw on a literal "%").
+  const sourceKey = source;
 
   const { data: cached, error } = await supabase
     .from("flashcards")
     .select("cards")
     .eq("user_id", user.id)
-    .eq("source_name", normalisedSource)
+    .eq("source_name", sourceKey)
     .maybeSingle();
 
   if (error) {
@@ -170,9 +172,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  // 4) Normalise the source name (percent-encoding / "+"-for-space), identical
-  //    to /api/lesson and /api/chat, so it matches the chunks + flashcards rows.
-  const normalisedSource = decodeURIComponent(source.replace(/\+/g, " "));
+  // 4) Keep source_name opaque. The upload route stores raw `file.name`, and the
+  //    client sends that same decoded string; mutating it here breaks lookups.
+  const sourceKey = source;
 
   // 5) Cache check. If we've already built cards for this user + source, return
   //    them — no Claude call, no token spend. (The lesson view normally loads
@@ -182,7 +184,7 @@ export async function POST(request: Request) {
     .from("flashcards")
     .select("cards")
     .eq("user_id", user.id)
-    .eq("source_name", normalisedSource)
+    .eq("source_name", sourceKey)
     .maybeSingle();
 
   if (cacheError) {
@@ -203,7 +205,7 @@ export async function POST(request: Request) {
     .from("chunks")
     .select("content")
     .eq("user_id", user.id)
-    .eq("source_name", normalisedSource);
+    .eq("source_name", sourceKey);
 
   if (chunksError) {
     console.error("[flashcards] chunk fetch error:", chunksError);
@@ -255,7 +257,7 @@ export async function POST(request: Request) {
     //    constraint; a failure here is non-fatal — the student still gets cards,
     //    they just won't be cached.
     const { error: upsertError } = await supabase.from("flashcards").upsert(
-      { user_id: user.id, source_name: normalisedSource, cards },
+      { user_id: user.id, source_name: sourceKey, cards },
       { onConflict: "user_id,source_name" },
     );
     if (upsertError) {
