@@ -57,32 +57,32 @@ export async function POST(request: Request) {
   //    orphan every section lesson. We delete the exact key OR the section keys.
   //
   //    `_` is a single-char wildcard in SQL LIKE, so we escape the literal
-  //    underscores in the filename and in "_section_" (ESCAPE '\') — otherwise a
-  //    file like "a_b.pdf" could over-match unrelated rows. The pattern matches
-  //    "<source>_section_" followed by anything (the digit index).
+  //    underscores in the filename and in "_section_" (Postgres LIKE defaults its
+  //    escape char to `\`) — otherwise a file like "a_b.pdf" could over-match
+  //    unrelated rows. The pattern matches "<source>_section_" then anything.
   const escapeLike = (s: string) => s.replace(/([\\%_])/g, "\\$1");
   const sectionPattern = `${escapeLike(source)}\\_section\\_%`;
 
-  // Run the four exact-match deletes together — they're independent.
-  const [chunksRes, sourcesRes, flashcardsRes, quizzesRes] = await Promise.all([
-    supabase.from("chunks").delete().eq("user_id", user.id).eq("source_name", source),
-    supabase.from("sources").delete().eq("user_id", user.id).eq("source_name", source),
-    supabase.from("flashcards").delete().eq("user_id", user.id).eq("source_name", source),
-    supabase.from("quizzes").delete().eq("user_id", user.id).eq("source_name", source),
-  ]);
-
-  // Lessons: exact whole-doc key OR any `<source>_section_<N>` key.
-  const lessonsRes = await supabase
-    .from("lessons")
-    .delete()
-    .eq("user_id", user.id)
-    .or(`source_name.eq.${source},source_name.like.${sectionPattern}`);
+  // Run every delete together — they're independent. Lessons gets TWO deletes:
+  // the exact whole-doc key, plus the `<source>_section_<N>` section keys. We use
+  // the builder's `.like()` rather than a hand-built `.or()` string so a filename
+  // containing PostgREST filter syntax (a comma, parens) can't break or
+  // mis-target the query — the builder encodes the value safely.
+  const [chunksRes, sourcesRes, flashcardsRes, quizzesRes, lessonRes, sectionRes] =
+    await Promise.all([
+      supabase.from("chunks").delete().eq("user_id", user.id).eq("source_name", source),
+      supabase.from("sources").delete().eq("user_id", user.id).eq("source_name", source),
+      supabase.from("flashcards").delete().eq("user_id", user.id).eq("source_name", source),
+      supabase.from("quizzes").delete().eq("user_id", user.id).eq("source_name", source),
+      supabase.from("lessons").delete().eq("user_id", user.id).eq("source_name", source),
+      supabase.from("lessons").delete().eq("user_id", user.id).like("source_name", sectionPattern),
+    ]);
 
   // 4) Surface the first real failure. RLS rejections and connection errors land
   //    here. We log the detail server-side and return a clean message — a partial
   //    delete (some tables cleared, one failed) is rare but possible, so we tell
   //    the user it didn't fully complete rather than silently claiming success.
-  const failure = [chunksRes, sourcesRes, flashcardsRes, quizzesRes, lessonsRes].find(
+  const failure = [chunksRes, sourcesRes, flashcardsRes, quizzesRes, lessonRes, sectionRes].find(
     (r) => r.error,
   );
   if (failure) {

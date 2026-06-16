@@ -108,7 +108,13 @@ export default function MaterialEditPanel({
         return;
       }
       onClose();
-      router.refresh();
+      // If the student is currently reading the material they just deleted, the
+      // lesson page would now fail to load its (gone) chunks. Send them to the
+      // dashboard instead; otherwise just re-run the server-rendered shell.
+      const viewing =
+        new URLSearchParams(window.location.search).get("source") === source.name;
+      if (viewing) router.push("/dashboard");
+      else router.refresh();
     } catch {
       setBusy(null);
       setError("Network error. Check your connection and try again.");
