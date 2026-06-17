@@ -33,7 +33,9 @@ export default function AuthLayout({
       {/* The φ mark links home — small, restrained, sits above the card. */}
       <Link
         href="/"
-        className="relative mb-8 select-none text-4xl font-extralight leading-none tracking-tighter text-accent transition-opacity hover:opacity-80"
+        // Tighter gap below md so on short phones (iPhone SE-height) the φ mark
+        // doesn't push the centered card past the fold; full breathing room at md+.
+        className="relative mb-6 select-none text-4xl font-extralight leading-none tracking-tighter text-accent transition-opacity hover:opacity-80 md:mb-8"
         aria-label="Phi — back to home"
       >
         φ
