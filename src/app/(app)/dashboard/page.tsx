@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { greetingForHour } from "@/lib/greeting";
+import {
+  legacySectionLessonCacheKey,
+  lessonCacheKey,
+} from "@/lib/lesson-cache-key";
 import Greeting from "./Greeting";
 
 // One section of a mapped source, as stored in `sources.sections` (jsonb). The
@@ -96,9 +100,9 @@ export default async function DashboardPage() {
 
   // ── Fetch which lessons are already cached ────────────────────────────────
   // A lesson row exists once /api/lesson generates and saves one. Section
-  // lessons are keyed `<source>_section_<index>` (see the lesson route), so this
-  // Set holds BOTH whole-document keys (legacy/flat cards) and per-section keys.
-  // We test membership with the matching key shape in each branch below.
+  // lessons are keyed with a reserved encoded namespace (see the lesson route),
+  // so this Set holds BOTH whole-document keys (legacy/flat cards) and
+  // per-section keys. We test membership with the matching helper below.
   const { data: lessonRows } = await supabase
     .from("lessons")
     .select("source_name")
@@ -107,6 +111,17 @@ export default async function DashboardPage() {
   const cachedSources = new Set(
     (lessonRows ?? []).map((row: { source_name: string }) => row.source_name),
   );
+
+  function hasCachedSectionLesson(source: string, sectionIndex: number) {
+    if (cachedSources.has(lessonCacheKey(source, sectionIndex))) return true;
+
+    // Before section keys had their own namespace, section N was cached as
+    // `<source>_section_<N>`. Keep recognizing that only when the key is not also
+    // the exact filename of a real upload, avoiding false "done" dots for a
+    // separate material named e.g. `notes_section_0`.
+    const legacyKey = legacySectionLessonCacheKey(source, sectionIndex);
+    return !seen.has(legacyKey) && cachedSources.has(legacyKey);
+  }
 
   // ── Time-of-day greeting (server fallback) ────────────────────────────────
   // The server clock is UTC on Vercel, so this value is only a first-paint
@@ -208,7 +223,7 @@ export default async function DashboardPage() {
             // "completed" when its per-section lesson is cached; the card CTA
             // reads "Continue" if ANY section has been studied.
             const anyCached = sections.some((s) =>
-              cachedSources.has(`${source}_section_${s.index}`),
+              hasCachedSectionLesson(source, s.index),
             );
 
             return (
@@ -247,7 +262,7 @@ export default async function DashboardPage() {
                     the pills stay compact; they wrap rather than overflow. */}
                 <div className="mt-5 flex flex-wrap gap-2">
                   {sections.map((s) => {
-                    const done = cachedSources.has(`${source}_section_${s.index}`);
+                    const done = hasCachedSectionLesson(source, s.index);
                     const label =
                       s.title.length > 20 ? `${s.title.slice(0, 20)}…` : s.title;
                     return (

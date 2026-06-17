@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Expected a JSON body." }, { status: 400 });
   }
 
-  const source = typeof body.source === "string" ? body.source.trim() : "";
+  const source = typeof body.source === "string" ? body.source : "";
   const title = typeof body.title === "string" ? body.title.trim() : "";
   if (source.length === 0) {
     return NextResponse.json({ error: "Missing source." }, { status: 400 });
