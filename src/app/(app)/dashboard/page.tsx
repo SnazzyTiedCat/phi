@@ -1,35 +1,22 @@
 import Link from "next/link";
+import { FireIcon } from "@heroicons/react/24/outline";
 import { createClient } from "@/lib/supabase/server";
 import { greetingForHour } from "@/lib/greeting";
-import {
-  legacySectionLessonCacheKey,
-  lessonCacheKey,
-} from "@/lib/lesson-cache-key";
 import Greeting from "./Greeting";
-
-// One section of a mapped source, as stored in `sources.sections` (jsonb). The
-// dashboard reads `index`/`title` to render the roadmap pills; the chunk-range
-// fields aren't needed here (the lesson page filters by section_index instead).
-type Section = {
-  index: number;
-  title: string;
-  description: string;
-  start_chunk: number;
-  end_chunk: number;
-};
 
 /**
  * The dashboard — the first thing a student sees after logging in.
  *
- * Server Component: we read the user's email AND their uploaded sources on the
- * server (same async Supabase client + cookie session as the layout). The (app)
- * layout already guarantees a logged-in user exists, but we still call getUser()
- * here because each page is responsible for the data IT needs — the email to
- * greet them, and the user id to scope the sources query.
+ * Server Component: we read the user, their most recently active material, and
+ * their study stats on the server (same async Supabase client + cookie session
+ * as the layout). The (app) layout guarantees a logged-in user, but we still
+ * call getUser() here because each page is responsible for the data IT needs.
  *
- * A "source" = one uploaded file. When a file is uploaded it's split into many
- * `chunks` rows, all sharing the same `source_name` (the filename). So to list a
- * student's subjects we need the DISTINCT set of source_name values for them.
+ * The redesign is intentionally focused: one greeting, one "Continue learning"
+ * hero for the material the student touched last, a small streak/stats row, and
+ * an understated way to add more. The full list of materials lives in the
+ * sidebar — the dashboard's job is to get the student back into the work, not to
+ * be a file browser.
  */
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -41,269 +28,182 @@ export default async function DashboardPage() {
   // user is guaranteed non-null here (the layout redirects otherwise), but the
   // `?.` keeps TypeScript happy since getUser()'s type allows null.
   const email = user?.email ?? "there";
+  const userId = user?.id ?? "";
 
-  // ── Fetch the student's uploaded sources ──────────────────────────────────
-  // Each upload produces many `chunks` rows that share one `source_name`. We
-  // want each filename listed ONCE, newest upload first.
-  //
-  // Postgres has `DISTINCT ON (source_name)` for exactly this, but the Supabase
-  // JS client can't express `DISTINCT ON` (it'd need a raw SQL RPC). The simple,
-  // readable alternative: pull source_name + created_at ordered newest-first,
-  // then de-duplicate in JS keeping the first time we see each name. Because the
-  // rows are already sorted newest-first, the first occurrence of each name IS
-  // its most-recent chunk — so the de-duped list stays in most-recent order.
-  //
-  // RLS (row-level security) on `chunks` already restricts rows to the current
-  // user, but we filter by user_id explicitly too: it's defense-in-depth and
-  // makes the intent obvious to anyone reading this later.
-  const { data: chunks } = await supabase
+  // ── Most recently active material ─────────────────────────────────────────
+  // Each upload produces many `chunks` rows sharing one `source_name`. Ordering
+  // by created_at descending and taking the first row gives the source whose
+  // latest chunk is newest — i.e. the material the student worked with last.
+  // RLS already scopes rows to the user; we also filter by user_id for explicit
+  // intent (defense-in-depth).
+  const { data: recentChunk } = await supabase
     .from("chunks")
-    .select("source_name, created_at")
-    .eq("user_id", user?.id ?? "")
-    .order("created_at", { ascending: false });
-
-  // De-duplicate: walk the (newest-first) rows and keep the first sighting of
-  // each source_name. A Set tracks which names we've already added.
-  const seen = new Set<string>();
-  const sources: string[] = [];
-  for (const row of chunks ?? []) {
-    if (!seen.has(row.source_name)) {
-      seen.add(row.source_name);
-      sources.push(row.source_name);
-    }
-  }
-
-  const hasSources = sources.length > 0;
-
-  // ── Fetch the section roadmap for each source ─────────────────────────────
-  // `sources` rows are written by /api/upload when mapping succeeds. Not every
-  // file has one: older uploads (pre-sectioning) and uploads where mapping was
-  // skipped/failed have no row — those fall back to a flat card below. We key
-  // the map by the exact `source_name` because it is the database identity; the
-  // display label may change, but the routing/mutation key must not.
-  const { data: sourceRows } = await supabase
-    .from("sources")
-    .select("source_name, sections, display_title")
-    .eq("user_id", user?.id ?? "");
-
-  const sectionsBySource = new Map<string, Section[]>();
-  // Friendly titles set by the rename action. Nullable: only renamed materials
-  // have one. Card headings fall back to the filename when absent.
-  const titleBySource = new Map<string, string>();
-  for (const row of sourceRows ?? []) {
-    const name = row.source_name;
-    sectionsBySource.set(name, (row.sections ?? []) as Section[]);
-    if (typeof row.display_title === "string" && row.display_title.trim()) {
-      titleBySource.set(name, row.display_title.trim());
-    }
-  }
-
-  // ── Fetch which lessons are already cached ────────────────────────────────
-  // A lesson row exists once /api/lesson generates and saves one. Section
-  // lessons are keyed with a reserved encoded namespace (see the lesson route),
-  // so this Set holds BOTH whole-document keys (legacy/flat cards) and
-  // per-section keys. We test membership with the matching helper below.
-  const { data: lessonRows } = await supabase
-    .from("lessons")
     .select("source_name")
-    .eq("user_id", user?.id ?? "");
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  const cachedSources = new Set(
-    (lessonRows ?? []).map((row: { source_name: string }) => row.source_name),
-  );
+  const recentSource = recentChunk?.source_name ?? null;
+  const hasMaterial = recentSource !== null;
 
-  function hasCachedSectionLesson(source: string, sectionIndex: number) {
-    if (cachedSources.has(lessonCacheKey(source, sectionIndex))) return true;
-
-    // Before section keys had their own namespace, section N was cached as
-    // `<source>_section_<N>`. Keep recognizing that only when the key is not also
-    // the exact filename of a real upload, avoiding false "done" dots for a
-    // separate material named e.g. `notes_section_0`.
-    const legacyKey = legacySectionLessonCacheKey(source, sectionIndex);
-    return !seen.has(legacyKey) && cachedSources.has(legacyKey);
+  // Friendly title for the hero, if the student renamed the material. The route
+  // still uses the raw `source_name` key — only the displayed label changes.
+  let recentLabel = recentSource;
+  if (recentSource) {
+    const { data: sourceRow } = await supabase
+      .from("sources")
+      .select("display_title")
+      .eq("user_id", userId)
+      .eq("source_name", recentSource)
+      .maybeSingle();
+    if (
+      sourceRow &&
+      typeof sourceRow.display_title === "string" &&
+      sourceRow.display_title.trim()
+    ) {
+      recentLabel = sourceRow.display_title.trim();
+    }
   }
+
+  // ── Study stats (streak + tallies) ────────────────────────────────────────
+  // One row per user in `user_stats`, written by /api/lesson and /api/quiz.
+  // Absent for a student who hasn't studied yet — treat that as all-zero.
+  const { data: stats } = await supabase
+    .from("user_stats")
+    .select("streak_count, lessons_completed, quizzes_completed")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const streak = stats?.streak_count ?? 0;
+  const lessonsCompleted = stats?.lessons_completed ?? 0;
+  const quizzesCompleted = stats?.quizzes_completed ?? 0;
+
+  // Don't show a wall of zeros to a new student — the streak is information, not
+  // pressure. The row only appears once there's something real to report.
+  const showStats =
+    streak > 0 || lessonsCompleted > 0 || quizzesCompleted > 0;
 
   // ── Time-of-day greeting (server fallback) ────────────────────────────────
-  // The server clock is UTC on Vercel, so this value is only a first-paint
-  // fallback — it keeps the greeting word from being missing before hydration.
-  // The <Greeting> client component corrects it to the student's LOCAL time on
-  // mount. Same buckets via the shared helper so the two can't drift.
+  // The server clock is UTC on Vercel, so this is only a first-paint fallback;
+  // the <Greeting> client component corrects it to the student's LOCAL time on
+  // mount via the same shared helper so the two can't drift.
   const greeting = greetingForHour(new Date().getHours());
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-12">
-      {/* ── Header row: greeting + persistent "Upload Material" action ─────────
-          Kept at the top whether or not the student has sources yet. When the
-          dashboard is empty the empty-state card below also offers an upload
-          button, but once subjects exist this header button is the only way to
-          add more — so it must always be present. `flex` with `justify-between`
-          puts the greeting on the left and the action on the right; it wraps on
-          narrow screens so the button drops below the text rather than
-          overflowing. */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          {/* Greeting reflects the student's LOCAL time-of-day. It's a client
-              component because only the browser knows their timezone; `greeting`
-              here is the server-rendered fallback shown until it hydrates. */}
-          <Greeting initial={greeting} email={email} />
-          <p className="mt-2 text-sm text-muted">
-            {hasSources
-              ? "Pick up where you left off, or upload something new."
-              : "Your subjects will live here. Upload your first material to begin."}
-          </p>
-        </div>
+    <div className="mx-auto w-full max-w-3xl px-6 py-12">
+      {/* Greeting reflects the student's LOCAL time-of-day; `greeting` here is
+          the server-rendered fallback shown until it hydrates. */}
+      <Greeting initial={greeting} email={email} />
 
-        {/* Persistent upload entry point. A Next.js <Link> (renders an <a>)
-            rather than a <button> because its job is navigation, not an in-page
-            action — that gives correct semantics (open-in-new-tab, right-click,
-            keyboard focus) for free and lets Next prefetch the route. Styled to
-            match the primary action used elsewhere. `shrink-0` stops it from
-            being squeezed when the greeting is long. */}
-        <Link
-          href="/upload"
-          className="inline-flex shrink-0 items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
-        >
-          Upload Material
-        </Link>
-      </div>
-
-      {hasSources ? (
-        /* ── Subject grid ──────────────────────────────────────────────────
-           One card per uploaded file. `grid` with responsive column counts:
-           1 column on mobile, 2 on small screens, 3 on large — so cards stay a
-           comfortable width instead of stretching edge-to-edge. */
-        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {sources.map((source) => {
-            const sections = sectionsBySource.get(source) ?? [];
-            // Card heading: the renamed title when set, else the filename. The
-            // URL still uses the raw `source` key — only the label changes.
-            const label = titleBySource.get(source) ?? source;
-
-            // ── Flat fallback card ──────────────────────────────────────────
-            // No section roadmap (old upload, or mapping was skipped/failed).
-            // Keep the original behaviour: the WHOLE card is one link, and the
-            // CTA reflects whether the whole-document lesson is cached.
-            if (sections.length === 0) {
-              const cached = cachedSources.has(source);
-              return (
-                <Link
-                  key={source}
-                  href={`/lesson?source=${encodeURIComponent(source)}`}
-                  className="group glass-standard shadow-card flex cursor-pointer flex-col rounded-2xl p-5 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-2 hover:shadow-2xl"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="text-2xl font-extralight leading-none text-accent"
-                  >
-                    φ
-                  </span>
-
-                  <h2 className="mt-4 break-words text-base font-medium text-text">
-                    {label}
-                  </h2>
-
-                  <span
-                    className={`mt-6 inline-flex items-center text-sm font-medium transition-colors ${
-                      cached ? "text-accent" : "text-muted"
-                    }`}
-                  >
-                    {cached ? "Continue learning" : "Start learning"}
-                    <span className="ml-1 transition-transform duration-300 group-hover:translate-x-1">
-                      →
-                    </span>
-                  </span>
-                </Link>
-              );
-            }
-
-            // ── Roadmap card ────────────────────────────────────────────────
-            // A mapped source. The card is a <div> (not a <Link>) because it
-            // contains several links — the header CTA plus one per section —
-            // and nesting <a> inside <a> is invalid HTML. A section is
-            // "completed" when its per-section lesson is cached; the card CTA
-            // reads "Continue" if ANY section has been studied.
-            const anyCached = sections.some((s) =>
-              hasCachedSectionLesson(source, s.index),
-            );
-
-            return (
-              <div
-                key={source}
-                className="glass-standard shadow-card flex flex-col rounded-2xl p-5 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-2 hover:shadow-2xl"
+      {/* ── Continue-learning hero ──────────────────────────────────────────
+          The single most important action on the page, given the most weight:
+          a large glass card that rises + scales in (Cinematic Reveal) on load.
+          With a material it offers a big gold "Continue"; empty, it invites the
+          first upload. */}
+      <section className="animate-cinematic-reveal glass-standard shadow-card mt-8 rounded-3xl p-8 sm:p-12">
+        {recentSource !== null ? (
+          <div className="flex flex-col items-start gap-8 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <span
+                aria-hidden="true"
+                className="text-3xl font-extralight leading-none text-accent"
               >
-                <span
-                  aria-hidden="true"
-                  className="text-2xl font-extralight leading-none text-accent"
-                >
-                  φ
-                </span>
+                φ
+              </span>
+              <h2 className="mt-4 break-words text-2xl font-semibold tracking-tight text-text">
+                {recentLabel}
+              </h2>
+              <p className="mt-2 text-sm text-muted">
+                Pick up where you left off.
+              </p>
+            </div>
 
-                <h2 className="mt-4 break-words text-base font-medium text-text">
-                  {label}
-                </h2>
+            {/* Large gold CTA. A <Link> (renders an <a>) because its job is
+                navigation; `shrink-0` keeps it from being squeezed by a long
+                title on the same row. */}
+            <Link
+              href={`/lesson?source=${encodeURIComponent(recentSource)}`}
+              className="inline-flex shrink-0 items-center rounded-full bg-accent px-8 py-4 text-base font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
+            >
+              Continue
+            </Link>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <span
+              aria-hidden="true"
+              className="text-5xl font-extralight leading-none text-muted"
+            >
+              φ
+            </span>
+            <p className="mt-6 max-w-sm text-sm text-muted">
+              Upload your first material to begin.
+            </p>
+            <Link
+              href="/upload"
+              className="mt-6 inline-flex items-center rounded-full bg-accent px-8 py-4 text-base font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
+            >
+              Upload Material
+            </Link>
+          </div>
+        )}
+      </section>
 
-                {/* Card CTA → opens the first section. Links (not the whole
-                    card) are the interactive elements here. */}
-                <Link
-                  href={`/lesson?source=${encodeURIComponent(source)}&section=0`}
-                  className={`group mt-4 inline-flex w-fit items-center text-sm font-medium transition-colors ${
-                    anyCached ? "text-accent" : "text-muted hover:text-text"
-                  }`}
-                >
-                  {anyCached ? "Continue learning" : "Start learning"}
-                  <span className="ml-1 transition-transform duration-300 group-hover:translate-x-1">
-                    →
-                  </span>
-                </Link>
+      {/* ── Stats row ───────────────────────────────────────────────────────
+          Three small glass pills: streak, lessons, quizzes. Numbers in gold,
+          labels muted. Each pill reveals with the same Cinematic Reveal, the
+          row starting 150ms after the hero and pills 80ms apart (inline
+          animation-delay). Hidden entirely when everything is zero. */}
+      {showStats && (
+        <div className="mt-6 grid grid-cols-3 gap-3 sm:gap-4">
+          <div
+            className="animate-cinematic-reveal glass-subtle flex items-center gap-3 rounded-2xl px-4 py-3"
+            style={{ animationDelay: "150ms" }}
+          >
+            <FireIcon
+              aria-hidden="true"
+              className="h-5 w-5 shrink-0 text-accent"
+            />
+            <div className="min-w-0">
+              <p className="text-xl font-semibold text-accent">{streak}</p>
+              <p className="truncate text-xs text-muted">Day streak</p>
+            </div>
+          </div>
 
-                {/* Section pills — the roadmap. Each links into its section;
-                    a gold dot marks sections whose lesson is already cached.
-                    Titles truncate to 20 chars (full title in the tooltip) so
-                    the pills stay compact; they wrap rather than overflow. */}
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {sections.map((s) => {
-                    const done = hasCachedSectionLesson(source, s.index);
-                    const label =
-                      s.title.length > 20 ? `${s.title.slice(0, 20)}…` : s.title;
-                    return (
-                      <Link
-                        key={s.index}
-                        href={`/lesson?source=${encodeURIComponent(source)}&section=${s.index}`}
-                        title={s.title}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.02] px-3 py-1 text-xs text-muted transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-accent/50 hover:text-accent active:scale-95"
-                      >
-                        {done && (
-                          <span
-                            aria-hidden="true"
-                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
-                          />
-                        )}
-                        <span className="truncate">{label}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+          <div
+            className="animate-cinematic-reveal glass-subtle flex flex-col justify-center rounded-2xl px-4 py-3"
+            style={{ animationDelay: "230ms" }}
+          >
+            <p className="text-xl font-semibold text-accent">
+              {lessonsCompleted}
+            </p>
+            <p className="truncate text-xs text-muted">Lessons completed</p>
+          </div>
+
+          <div
+            className="animate-cinematic-reveal glass-subtle flex flex-col justify-center rounded-2xl px-4 py-3"
+            style={{ animationDelay: "310ms" }}
+          >
+            <p className="text-xl font-semibold text-accent">
+              {quizzesCompleted}
+            </p>
+            <p className="truncate text-xs text-muted">Quizzes completed</p>
+          </div>
         </div>
-      ) : (
-        /* ── Empty state ───────────────────────────────────────────────────
-           Shown only when the student has no sources. The dashed border signals
-           "this is a slot waiting to be filled," distinct from the solid-
-           bordered cards above. Centered content keeps it calm rather than busy.
-           It carries its own upload button so the empty dashboard has a clear,
-           central call to action (in addition to the header one). */
-        <div className="mt-10 flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.10] bg-surface/40 px-6 py-16 text-center">
-          <p className="max-w-sm text-sm text-muted">
-            No subjects yet — upload your first material to get started.
-          </p>
+      )}
 
+      {/* ── Secondary upload ────────────────────────────────────────────────
+          Understated (ghost) entry point to add more material — deliberately
+          quieter than the hero CTA so it never competes with "Continue".
+          Hidden in the empty state, where the hero already offers an upload. */}
+      {hasMaterial && (
+        <div className="mt-8">
           <Link
             href="/upload"
-            className="mt-6 inline-flex items-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
+            className="inline-flex items-center rounded-full border border-white/10 bg-surface/40 px-6 py-3 text-sm font-medium text-text transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg active:scale-95"
           >
-            Upload Material
+            Upload new material
           </Link>
         </div>
       )}

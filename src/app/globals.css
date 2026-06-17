@@ -54,6 +54,12 @@
 
   /* Material edit panel — slides in from the right edge on the Spades curve. */
   --animate-slide-in-right: slide-in-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  /* Dashboard "Cinematic Reveal" — the hero card (and the stats pills, staggered
+     via inline animation-delay) rise + scale up from a slightly shrunk, lowered
+     start. 900ms on the Spades expo curve; `both` holds the from-state until the
+     delay elapses so staggered pills stay hidden until their turn. */
+  --animate-cinematic-reveal: cinematic-reveal 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* Inter is the optional "Reading font" (Appearance setting). next/font loads it
@@ -88,6 +94,17 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes cinematic-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
 
