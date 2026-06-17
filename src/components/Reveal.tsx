@@ -24,10 +24,17 @@ type Direction = "up" | "left" | "right";
 
 // The hidden (pre-reveal) transform for each entrance direction. Always pairs
 // opacity with a transform — never animates one alone (DESIGN.md §3.6).
+//
+// On mobile, horizontal slide-ins (`left`/`right`) read as broken: their cards
+// stack to a single full-width column, so a sideways entrance either gets
+// clipped by the viewport edge or just looks arbitrary. Below md we collapse
+// both into the same gentle vertical rise as `up`; the horizontal direction
+// only kicks in at md+ where the two-column layout actually has left/right
+// sides for the motion to mean something.
 const HIDDEN: Record<Direction, string> = {
   up: "translate-y-5 opacity-0",
-  left: "-translate-x-8 opacity-0",
-  right: "translate-x-8 opacity-0",
+  left: "translate-y-5 opacity-0 md:translate-y-0 md:-translate-x-8",
+  right: "translate-y-5 opacity-0 md:translate-y-0 md:translate-x-8",
 };
 
 export default function Reveal({
