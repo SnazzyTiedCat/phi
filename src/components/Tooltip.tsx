@@ -32,7 +32,11 @@ export function Tooltip({
       {children}
       <span
         role="tooltip"
-        className={`absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-zinc-900/90 px-3 py-1.5 text-xs text-zinc-100 opacity-0 backdrop-blur-md transition-all duration-200 pointer-events-none scale-95 group-hover:scale-100 group-hover:opacity-100 ${
+        // `hidden md:block` keeps the tooltip off touch/phone layouts entirely:
+        // there's no hover to reveal it, so below md it would just be dead weight
+        // (and could flash on tap). The icon it labels has its own aria-label, so
+        // nothing is lost on mobile. It returns to a hover-revealed label at md+.
+        className={`absolute top-1/2 hidden -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-zinc-900/90 px-3 py-1.5 text-xs text-zinc-100 opacity-0 backdrop-blur-md transition-all duration-200 pointer-events-none scale-95 group-hover:scale-100 group-hover:opacity-100 md:block ${
           side === "right"
             ? "left-full ml-2 origin-left"
             : "right-full mr-2 origin-right"
