@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { depthInstruction } from "@/lib/tutor-depth";
+import { recordActivity } from "@/lib/user-stats";
 import {
   legacySectionLessonCacheKey,
   lessonCacheKey,
@@ -153,6 +154,8 @@ export async function POST(request: Request) {
 
   if (cached) {
     console.log("[lesson] Cache hit — returning stored lesson");
+    // A cache hit is still a lesson view — count it toward the streak/stats.
+    await recordActivity(supabase, user.id, "lessons_completed");
     return NextResponse.json({ lesson: cached.content });
   }
 
@@ -185,6 +188,7 @@ export async function POST(request: Request) {
 
       if (legacyCached) {
         console.log("[lesson] Legacy cache hit — returning stored lesson");
+        await recordActivity(supabase, user.id, "lessons_completed");
         return NextResponse.json({ lesson: legacyCached.content });
       }
     }
@@ -289,6 +293,8 @@ export async function POST(request: Request) {
       console.log("[lesson] lesson cached successfully for source:", cacheSource);
     }
 
+    // Fresh generation is also a lesson view — count it toward the streak/stats.
+    await recordActivity(supabase, user.id, "lessons_completed");
     return NextResponse.json({ lesson });
   } catch (err) {
     // Translate Anthropic SDK errors into a helpful message + status.

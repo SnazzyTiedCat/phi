@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { recordActivity } from "@/lib/user-stats";
 
 /**
  * /api/quiz
@@ -260,6 +261,8 @@ export async function POST(request: Request) {
     console.error("[quiz] cache lookup error:", cacheError);
   }
   if (cached) {
+    // Serving a quiz counts toward the student's streak + quiz tally.
+    await recordActivity(supabase, user.id, "quizzes_completed");
     return NextResponse.json({ questions: cached.questions });
   }
 
@@ -345,6 +348,8 @@ export async function POST(request: Request) {
       console.error("[quiz] upsert error (quiz will not be cached):", upsertError);
     }
 
+    // A freshly generated quiz counts toward the streak + quiz tally too.
+    await recordActivity(supabase, user.id, "quizzes_completed");
     return NextResponse.json({ questions });
   } catch (err) {
     // Same Anthropic error translation as the other routes: helpful
