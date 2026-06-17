@@ -11,8 +11,8 @@ import {
  *
  * Permanently removes ONE material (one uploaded file) and everything derived
  * from it, for the signed-in user only. A "material" isn't its own table — it's
- * a `source_name` value shared across five tables, all scoped by `user_id`:
- * `chunks`, `sources`, `lessons`, `flashcards`, `quizzes`.
+ * a `source_name` value shared across six tables, all scoped by `user_id`:
+ * `chunks`, `sources`, `lessons`, `flashcards`, `quizzes`, `source_meta`.
  *
  * Why the normal (cookie-bound) server client, NOT the service-role admin client:
  * this only deletes the caller's OWN rows. RLS on each table already restricts
@@ -127,6 +127,7 @@ export async function POST(request: Request) {
     lessonRes,
     sectionRes,
     legacySectionRes,
+    metaRes,
   ] = await Promise.all([
     supabase.from("chunks").delete().eq("user_id", user.id).eq("source_name", source),
     supabase.from("sources").delete().eq("user_id", user.id).eq("source_name", source),
@@ -149,6 +150,13 @@ export async function POST(request: Request) {
           .eq("user_id", user.id)
           .in("source_name", safeLegacyKeys)
       : Promise.resolve(emptyDelete),
+    // source_meta holds only the material's icon/subject/title metadata, keyed by
+    // the exact source_name — a plain `.eq` clears it alongside the content tables.
+    supabase
+      .from("source_meta")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("source_name", source),
   ]);
 
   // 4) Surface the first real failure. RLS rejections and connection errors land
@@ -163,6 +171,7 @@ export async function POST(request: Request) {
     lessonRes,
     sectionRes,
     legacySectionRes,
+    metaRes,
   ].find((r) => r.error);
   if (failure) {
     console.error("[material/delete] delete error:", failure.error);
