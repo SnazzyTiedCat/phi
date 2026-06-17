@@ -132,7 +132,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
-      {/* ── Header row: greeting + persistent "Upload material" action ─────────
+      {/* ── Header row: greeting + persistent "Upload Material" action ─────────
           Kept at the top whether or not the student has sources yet. When the
           dashboard is empty the empty-state card below also offers an upload
           button, but once subjects exist this header button is the only way to
