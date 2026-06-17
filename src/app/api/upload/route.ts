@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { extractText } from "unpdf";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { isReservedLessonCacheKey } from "@/lib/lesson-cache-key";
 
 /**
  * POST /api/upload
@@ -222,6 +223,16 @@ export async function POST(request: Request) {
   if (!(file instanceof File)) {
     return NextResponse.json(
       { error: "No file provided. Attach a file under the 'file' field." },
+      { status: 400 },
+    );
+  }
+
+  // Lesson section caches use a reserved synthetic `source_name` namespace.
+  // Browser file pickers should never produce names with `/`, but rejecting the
+  // prefix here keeps crafted multipart uploads from colliding with cache rows.
+  if (isReservedLessonCacheKey(file.name)) {
+    return NextResponse.json(
+      { error: "This filename is reserved. Rename the file and upload again." },
       { status: 400 },
     );
   }
