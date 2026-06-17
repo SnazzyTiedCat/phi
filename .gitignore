@@ -40,10 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
-<<<<<<< HEAD
 
 # local Claude Code worktrees (separate checkouts, not repo content)
 /.claude/worktrees/
-=======
-.claude/
->>>>>>> a4d6ccb (chore: ignore .claude folder)
