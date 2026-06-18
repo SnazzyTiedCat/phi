@@ -37,6 +37,9 @@ export default function MaterialEditPanel({
   // Which action (if any) is in flight, so we can disable buttons + show status.
   const [busy, setBusy] = useState<"save" | "delete" | null>(null);
   const [error, setError] = useState("");
+  // Which action the current error belongs to, so it renders next to that
+  // action's button rather than orphaned at the bottom of the panel.
+  const [errorScope, setErrorScope] = useState<"save" | "delete" | null>(null);
 
   // Reset the fields each time a different material opens the panel.
   useEffect(() => {
@@ -45,6 +48,7 @@ export default function MaterialEditPanel({
       setDeleteConfirm("");
       setBusy(null);
       setError("");
+      setErrorScope(null);
     }
   }, [source]);
 
@@ -69,6 +73,7 @@ export default function MaterialEditPanel({
     if (!source) return;
     setBusy("save");
     setError("");
+    setErrorScope(null);
     try {
       const res = await fetch("/api/material/rename", {
         method: "POST",
@@ -79,6 +84,7 @@ export default function MaterialEditPanel({
       if (!res.ok) {
         setBusy(null);
         setError(data.error ?? "Could not rename. Please try again.");
+        setErrorScope("save");
         return;
       }
       onClose();
@@ -86,6 +92,7 @@ export default function MaterialEditPanel({
     } catch {
       setBusy(null);
       setError("Network error. Check your connection and try again.");
+      setErrorScope("save");
     }
   }
 
@@ -95,6 +102,7 @@ export default function MaterialEditPanel({
     if (!source) return;
     setBusy("delete");
     setError("");
+    setErrorScope(null);
     try {
       const res = await fetch("/api/material/delete", {
         method: "POST",
@@ -105,6 +113,7 @@ export default function MaterialEditPanel({
       if (!res.ok) {
         setBusy(null);
         setError(data.error ?? "Could not delete. Please try again.");
+        setErrorScope("delete");
         return;
       }
       onClose();
@@ -118,6 +127,7 @@ export default function MaterialEditPanel({
     } catch {
       setBusy(null);
       setError("Network error. Check your connection and try again.");
+      setErrorScope("delete");
     }
   }
 
@@ -174,6 +184,13 @@ export default function MaterialEditPanel({
             >
               {busy === "save" ? "Saving…" : "Save changes"}
             </button>
+            {/* Save error sits directly under its button. role="alert" so a
+                screen reader announces a failed rename. */}
+            {error && errorScope === "save" && (
+              <p role="alert" className="mt-3 text-sm text-red-400">
+                {error}
+              </p>
+            )}
           </div>
 
           {/* Danger zone — pushed to the bottom with mt-auto. */}
@@ -204,15 +221,14 @@ export default function MaterialEditPanel({
             >
               {busy === "delete" ? "Deleting…" : "Delete material"}
             </button>
+            {/* Delete error stays inside the danger zone, under its button —
+                not orphaned at the bottom of the panel (MaterialEditNetworkError). */}
+            {error && errorScope === "delete" && (
+              <p role="alert" className="mt-4 text-sm text-red-400">
+                {error}
+              </p>
+            )}
           </div>
-
-          {/* Shared error line for both actions. role="alert" so a screen reader
-              announces a failed save/delete. Only rendered when there's a message. */}
-          {error && (
-            <p role="alert" className="text-sm text-red-400">
-              {error}
-            </p>
-          )}
         </div>
       </aside>
     </div>,
