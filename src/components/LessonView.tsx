@@ -1422,6 +1422,19 @@ function QuizRunner({ questions }: { questions: QuizQuestion[] }) {
   const [isGrading, setIsGrading] = useState(false);
   const [gradeError, setGradeError] = useState("");
 
+  // Auto-grow the answer box to fit its content. A fixed-`rows` textarea scrolls
+  // its first line up under the top padding once the answer overflows (the
+  // QuizFieldCheck bug); growing to `scrollHeight` keeps the whole answer visible.
+  // Runs on every `saInput` change, so it also resets the height when next()/
+  // restart() clear the field for the following question.
+  const saRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = saRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [saInput]);
+
   const question = questions[current];
   const isLast = current === questions.length - 1;
   // Whether the current question is locked, regardless of type. Drives the
@@ -1535,6 +1548,7 @@ function QuizRunner({ questions }: { questions: QuizQuestion[] }) {
         // ── Short-answer question ──
         <>
           <textarea
+            ref={saRef}
             value={saInput}
             onChange={(e) => setSaInput(e.target.value)}
             disabled={saResult !== null || isGrading}
@@ -1542,7 +1556,7 @@ function QuizRunner({ questions }: { questions: QuizQuestion[] }) {
             placeholder="Type your answer…"
             aria-label="Your answer"
             className="
-              mt-5 w-full resize-none rounded-xl border border-white/10 bg-background px-4 py-3
+              mt-5 min-h-[4.75rem] w-full resize-none overflow-hidden rounded-xl border border-white/10 bg-background px-4 py-3
               text-sm leading-relaxed text-text placeholder:text-muted
               focus:border-accent/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60
             "
