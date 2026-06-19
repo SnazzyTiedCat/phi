@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Space_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
@@ -27,6 +27,19 @@ export const metadata: Metadata = {
   title: "Phi — Your notes. Your tutor. Your mastery.",
   description:
     "Upload your study material. Phi structures it into lessons, teaches it back to you, and doesn't stop until you've got it.",
+};
+
+// Responsive viewport. Next's App Router already emits `width=device-width,
+// initial-scale=1` by default, but we declare it explicitly so it can never be
+// silently overridden, and so the mobile pass has a single obvious source of
+// truth. `viewportFit: "cover"` lets content extend under a notch/dynamic
+// island, which is what makes the `env(safe-area-inset-*)` offsets on the
+// floating toggle (SidebarToggle) actually have room to take effect. We do NOT
+// disable user scaling — pinch-zoom is an accessibility requirement.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

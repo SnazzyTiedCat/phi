@@ -57,7 +57,7 @@ export default function Sidebar({ sources }: { sources: SidebarSource[] }) {
       {/* Panel — glass, full height, slides on the Spades expo curve. */}
       <aside
         aria-label="Your materials"
-        className={`fixed inset-y-0 left-0 z-40 flex w-[280px] flex-col border-r border-white/10 bg-white/[0.055] backdrop-blur-[18px] transition-transform duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-[320px] flex-col border-r border-white/10 bg-white/[0.055] backdrop-blur-[18px] transition-transform duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] md:w-[280px] ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -68,7 +68,7 @@ export default function Sidebar({ sources }: { sources: SidebarSource[] }) {
           <Link
             href="/account"
             onClick={close}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-sm text-zinc-400 transition-colors duration-150 hover:border-white/30 hover:text-white"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-sm text-zinc-400 transition-colors duration-150 hover:border-white/30 hover:text-white"
           >
             <UserCircleIcon className="h-4 w-4" />
             Account
@@ -80,7 +80,7 @@ export default function Sidebar({ sources }: { sources: SidebarSource[] }) {
           <Link
             href="/upload"
             onClick={close}
-            className="flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:bg-[#e2bb68] hover:shadow-lg active:scale-95"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:bg-[#e2bb68] hover:shadow-lg active:scale-95"
           >
             <ArrowUpTrayIcon className="h-4 w-4" />
             Upload Material
@@ -92,7 +92,7 @@ export default function Sidebar({ sources }: { sources: SidebarSource[] }) {
             Your Materials
           </p>
 
-          <div className="mt-2 flex-1 space-y-0.5 overflow-y-auto pb-3">
+          <div className="mt-2 flex-1 space-y-0.5 overflow-y-auto overscroll-contain pb-3">
             {sources.length === 0 ? (
               <p className="px-3 py-2 text-xs leading-relaxed text-c-600">
                 Nothing here yet. Upload your first material to get started.
@@ -161,7 +161,7 @@ function MaterialItem({
         href={href}
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
-        className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 pr-9 transition-colors duration-150 hover:bg-white/5 ${
+        className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2.5 pr-12 transition-colors duration-150 hover:bg-white/5 ${
           active ? "bg-white/[0.08]" : ""
         }`}
       >
@@ -183,7 +183,7 @@ function MaterialItem({
         aria-label={`Options for ${source.title}`}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
-        className="material-menu absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-c-400 transition-all duration-150 hover:bg-white/10 hover:text-text"
+        className="material-menu absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-c-400 transition-all duration-150 hover:bg-white/10 hover:text-text"
       >
         <EllipsisVerticalIcon className="h-4 w-4" />
       </button>
@@ -207,7 +207,7 @@ function MaterialItem({
                 setMenuOpen(false);
                 onEdit();
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text transition-colors hover:bg-white/5"
+              className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-text transition-colors hover:bg-white/5"
             >
               <PencilSquareIcon className="h-4 w-4 text-c-400" />
               Edit
@@ -219,7 +219,7 @@ function MaterialItem({
                 setMenuOpen(false);
                 onEdit();
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-400 transition-colors hover:bg-red-500/10"
+              className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-400 transition-colors hover:bg-red-500/10"
             >
               <TrashIcon className="h-4 w-4" />
               Delete

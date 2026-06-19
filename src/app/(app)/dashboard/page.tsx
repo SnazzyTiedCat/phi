@@ -189,7 +189,7 @@ export default async function DashboardPage() {
                 <Link
                   key={source}
                   href={`/lesson?source=${encodeURIComponent(source)}`}
-                  className="group glass-standard shadow-card flex cursor-pointer flex-col rounded-2xl p-5 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-2 hover:shadow-2xl"
+                  className="group glass-standard shadow-card flex cursor-pointer flex-col rounded-2xl p-4 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-2 hover:shadow-2xl md:p-5"
                 >
                   <span
                     aria-hidden="true"
@@ -229,7 +229,7 @@ export default async function DashboardPage() {
             return (
               <div
                 key={source}
-                className="glass-standard shadow-card flex flex-col rounded-2xl p-5 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-2 hover:shadow-2xl"
+                className="glass-standard shadow-card flex flex-col rounded-2xl p-4 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-2 hover:shadow-2xl md:p-5"
               >
                 <span
                   aria-hidden="true"

@@ -38,8 +38,14 @@ export default function Greeting({
   }, []);
 
   return (
-    <h1 className="text-3xl font-semibold tracking-tight text-text">
-      {greeting}, <span className="text-accent">{email}</span>
+    // Smaller on mobile so a long email doesn't force an awkward wrap. The email
+    // itself truncates (inline-block + max-width) below md rather than wrapping
+    // mid-string; at md+ it shows in full at the larger size.
+    <h1 className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold tracking-tight text-text md:text-3xl">
+      <span>{greeting},</span>
+      <span className="inline-block max-w-[60vw] truncate align-bottom text-accent md:max-w-none">
+        {email}
+      </span>
     </h1>
   );
 }

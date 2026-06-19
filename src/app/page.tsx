@@ -129,11 +129,14 @@ export default function Home() {
         </Reveal>
 
         <Reveal hero from="up" delay={360}>
-          <div className="mt-11 flex flex-wrap items-center justify-center gap-4">
-            <Link href="/signup" className={BTN_PRIMARY}>
+          {/* Below md the two CTAs stack and go full-width (capped by max-w-sm)
+              so neither gets crushed at 375px; at md+ they return to a centered
+              side-by-side row. */}
+          <div className="mt-11 flex w-full max-w-sm flex-col items-stretch gap-4 md:max-w-none md:flex-row md:items-center md:justify-center">
+            <Link href="/signup" className={`${BTN_PRIMARY} w-full md:w-auto`}>
               Start learning free
             </Link>
-            <a href="#how" className={BTN_SECONDARY}>
+            <a href="#how" className={`${BTN_SECONDARY} w-full md:w-auto`}>
               See how it works
             </a>
           </div>

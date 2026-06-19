@@ -22,7 +22,11 @@ export default function SidebarToggle() {
       onClick={toggle}
       aria-label={isOpen ? "Close menu" : "Open menu"}
       aria-expanded={isOpen}
-      className="group fixed left-4 top-4 z-50 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-zinc-900/80 backdrop-blur-md transition-colors duration-200 hover:border-white/20"
+      // top-4/left-4 normally, but on notched/dynamic-island phones the safe-area
+      // insets push it clear of system UI — max() means devices without a notch
+      // (inset = 0) are unaffected. Requires viewportFit: "cover" (set in the root
+      // layout's viewport export) for the insets to be non-zero.
+      className="group fixed left-[max(1rem,env(safe-area-inset-left))] top-[max(1rem,env(safe-area-inset-top))] z-50 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-zinc-900/80 backdrop-blur-md transition-colors duration-200 hover:border-white/20"
     >
       {isOpen ? (
         <XMarkIcon className="h-5 w-5 text-white" />
