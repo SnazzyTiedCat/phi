@@ -19,6 +19,8 @@ const BTN_SECONDARY =
   "inline-flex items-center justify-center rounded-full border border-c-500 px-7 py-3.5 text-[11px] font-bold uppercase tracking-[0.1em] text-white transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-white";
 const CARD =
   "glass-standard shadow-card h-full rounded-[24px] p-8 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1.5 hover:border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.65)]";
+const CARD_SUBTLE =
+  "glass-subtle shadow-card h-full rounded-[24px] p-8 transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1.5 hover:border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.65)]";
 
 const RESEARCH_ROWS = [
   "Answers what you ask — nothing more",
@@ -159,7 +161,7 @@ export default function Home() {
 
             <div className="mt-12 grid gap-6 md:grid-cols-2">
               <Reveal from="left">
-                <div className={`${CARD} opacity-90`}>
+                <div className={CARD_SUBTLE}>
                   <h3 className="text-[14px] font-bold uppercase tracking-[0.12em] text-c-500">
                     Research tools
                   </h3>
