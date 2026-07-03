@@ -1,0 +1,1682 @@
+"use client";
+
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import {
+  Squares2X2Icon,
+  AcademicCapIcon,
+  PlayIcon,
+  PauseIcon,
+  ChatBubbleLeftIcon,
+  EllipsisHorizontalIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
+import { EXPLANATION_DEPTH_KEY } from "@/lib/tutor-depth";
+
+/**
+ * LessonView — the interactive half of the lesson page.
+ *
+ * The Server Component (lesson/page.tsx) fetched the chunks and passed them
+ * here. This component runs in the BROWSER, which is the only place that can:
+ *   1. Read the Anthropic API key out of localStorage, and
+ *   2. POST it to /api/lesson to generate the taught lesson.
+ *
+ * The whole component is a small state machine. At any moment we're in exactly
+ * one of four states, and each renders a different thing:
+ *
+ *   "no-key"  → student hasn't saved an Anthropic key yet → point them to Settings
+ *   "loading" → request in flight → calm "preparing your lesson" screen
+ *   "error"   → request failed → show the message we got back
+ *   "done"    → success → render the lesson markdown
+ *
+ * Using one `status` string (instead of several booleans) makes the states
+ * mutually exclusive by construction — you can't accidentally be "loading" and
+ * "error" at the same time.
+ */
+
+type Props = {
+  chunks: string[];
+  source: string;
+  // Optional section context, set when the student opened ONE section of a
+  // mapped document. The server page already filtered `chunks` to this section;
+  // these are forwarded to /api/lesson so it keys the cache per-section and
+  // focuses the tutor prompt. Undefined = whole-document lesson.
+  sectionIndex?: number;
+  sectionTitle?: string;
+};
+
+type Status = "loading" | "no-key" | "error" | "done";
+
+// One chat turn. Same shape the /api/chat route expects in its `history` array,
+// and the same shape Anthropic's `messages` array uses — so what we keep in
+// state maps 1:1 onto what we send, no translation needed.
+type Message = { role: "user" | "assistant"; content: string };
+
+// One flashcard — the exact shape /api/flashcards returns and the FlipCard
+// component (bottom of this file) renders.
+type Flashcard = { front: string; back: string };
+
+// One quiz question — the exact shape /api/quiz returns and the QuizRunner
+// component (bottom of this file) renders. Two shapes, discriminated by `type`:
+//   - multiple_choice: `correct` is the 0-based index into `options`. Legacy
+//     cached questions have no `type` field, so it's optional and absence means
+//     multiple choice.
+//   - short_answer: free text, graded against `sample_answer` via /api/grade.
+type QuizQuestion =
+  | { question: string; type?: "multiple_choice"; options: string[]; correct: number }
+  | { question: string; type: "short_answer"; sample_answer: string };
+
+export default function LessonView({
+  chunks,
+  source,
+  sectionIndex,
+  sectionTitle,
+}: Props) {
+  // Start in "loading": the moment the component mounts we'll either kick off
+  // the request or immediately flip to "no-key". Starting here avoids a flash
+  // of empty content before the effect runs.
+  const [status, setStatus] = useState<Status>("loading");
+  const [lesson, setLesson] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string>("");
+
+  // ── Read-aloud (browser Web Speech API) state ──────────────────────────────
+  // No <audio> element and no network: we hand the lesson text straight to the
+  // browser's built-in speech synthesizer (window.speechSynthesis). We keep a
+  // ref to the current utterance because some browsers garbage-collect an
+  // utterance that nothing references, which silently kills its events — holding
+  // it here keeps it (and its onend handler) alive while it's speaking.
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  // Drives the play/pause icon. True only while speech is actively playing.
+  const [isPlaying, setIsPlaying] = useState(false);
+  // Whether this browser can speak. Web Speech is widely supported but not
+  // universal, and `window` doesn't exist during the server render. This reuses
+  // the exact hydration-safe pattern the old ElevenLabs-key check used: the
+  // server pass reads `false` (bar hidden in the initial HTML), then client
+  // hydration picks up the real value. Reading in the initializer (not an
+  // effect) avoids the cascading re-render React warns about. It REPLACES the
+  // old "does the student have an ElevenLabs key?" gate — read-aloud now needs
+  // no key at all, just a capable browser.
+  const [supportsSpeech] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return "speechSynthesis" in window;
+  });
+
+  // If the student navigates away mid-read, stop the voice — otherwise the
+  // browser keeps speaking after this view is gone (speechSynthesis is global,
+  // not tied to the component).
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    // We define the request as an inner async function because `useEffect`'s
+    // callback itself cannot be `async` (it must return either nothing or a
+    // cleanup function, not a Promise).
+    async function generate() {
+      // Read the key from localStorage (may be null — that's fine here). We send
+      // it regardless: /api/lesson checks its cache server-side FIRST and returns
+      // a stored lesson with NO key required. The key only matters on a cache
+      // miss, when generation actually has to happen. This is what lets a
+      // returning student re-open a lesson they've already generated even if they
+      // never saved (or have since cleared) their key.
+      const apiKey = localStorage.getItem("phi_anthropic_key");
+
+      // Forward the student's explanation-depth setting (Tutor) so the prompt can
+      // shape the teaching voice on a fresh generation.
+      const depth = localStorage.getItem(EXPLANATION_DEPTH_KEY);
+      try {
+        const res = await fetch("/api/lesson", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chunks,
+            source,
+            apiKey,
+            sectionIndex,
+            sectionTitle,
+            depth,
+          }),
+        });
+
+        const data: { lesson?: string; error?: string; needsKey?: boolean } =
+          await res.json();
+
+        // Cache miss AND no key on file → the route signals `needsKey` so we can
+        // show the "add your key in Account" prompt. This is the ONLY path to the
+        // no-key state now: a cache hit returns the lesson above, key or not.
+        if (data.needsKey) {
+          setStatus("no-key");
+          return;
+        }
+
+        if (!res.ok) {
+          // The route handler always sends `{ error }` on failure. Fall back to
+          // a generic message if for some reason it didn't.
+          setErrorMessage(data.error || "Something went wrong. Please try again.");
+          setStatus("error");
+          return;
+        }
+
+        // Success: stash the markdown and flip to "done".
+        setLesson(data.lesson ?? "");
+        setStatus("done");
+      } catch {
+        // A thrown error here means the fetch itself failed (network down,
+        // request aborted) — distinct from an error STATUS the server returned.
+        setErrorMessage("Network error. Check your connection and try again.");
+        setStatus("error");
+      }
+    }
+
+    generate();
+    // Empty dependency array = run exactly once, when the component mounts.
+    // `chunks`/`source` come from the server render and don't change while
+    // this component is alive, so there's no need to re-run on their account.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Chat sidebar state ──────────────────────────────────────────────────--
+  // The whole conversation, oldest first. We render this list and also send it
+  // (minus the in-flight message) to /api/chat as `history`.
+  const [messages, setMessages] = useState<Message[]>([]);
+  // The controlled textarea value.
+  const [chatInput, setChatInput] = useState("");
+  // True while a request is in flight. Disables the input + send button so the
+  // student can't fire a second request on top of the first.
+  const [isChatLoading, setIsChatLoading] = useState(false);
+
+  // Auto-scroll anchor. We put an empty div at the very bottom of the message
+  // list and scroll it into view whenever `messages` changes — so the newest
+  // message (and each streamed token) stays visible without manual scrolling.
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // `block: "end"` keeps the anchor pinned to the bottom of the scroll area.
+    // This runs on every messages change, including each streamed token, so the
+    // view tracks the growing assistant reply in real time.
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages]);
+
+  // ── Flashcards state ────────────────────────────────────────────────────--
+  // The generated cards, or null until we've loaded/generated them. null vs an
+  // empty array matters: null = "none yet" (show the Generate bar); a populated
+  // array = "show the cards".
+  const [flashcards, setFlashcards] = useState<Flashcard[] | null>(null);
+  // True while a generation request (POST) is in flight — drives the button's
+  // "Generating…" state and blocks double-clicks.
+  const [isFlashcardsLoading, setIsFlashcardsLoading] = useState(false);
+  // A user-facing message for the flashcards bar (missing key, network, etc).
+  const [flashcardsError, setFlashcardsError] = useState("");
+
+  // ── Quiz state ──────────────────────────────────────────────────────────--
+  // Same shape as flashcards: the generated questions (null until loaded), an
+  // in-flight flag, and an error message.
+  const [quiz, setQuiz] = useState<QuizQuestion[] | null>(null);
+  const [isQuizLoading, setIsQuizLoading] = useState(false);
+  const [quizError, setQuizError] = useState("");
+  // Quiz config (the step shown before generating). Question count is 3–10
+  // (default 5); the two question types are independent toggles, MC on by default.
+  const [quizCount, setQuizCount] = useState(5);
+  const [quizTypes, setQuizTypes] = useState({
+    multiple_choice: true,
+    short_answer: false,
+  });
+
+  // ── Floating action bar toggles ────────────────────────────────────────--
+  // Whether the flashcards panel is shown. Toggled by the floating bar's grid
+  // button. Starts closed — the lesson is the focus; cards are opt-in.
+  const [flashcardsOpen, setFlashcardsOpen] = useState(false);
+  // Whether the quiz panel is shown. Mutually exclusive with flashcards (both
+  // render in the same spot below the lesson), so opening one closes the other.
+  const [quizOpen, setQuizOpen] = useState(false);
+  // Whether the chat sidebar is expanded. Toggled by the floating bar's chat
+  // button. Starts open so "Ask" is there by default. When closed we unmount the
+  // aside, and the lesson <main> (flex-1) grows to fill the freed width.
+  const [chatOpen, setChatOpen] = useState(true);
+
+  // Flashcards and quiz share the area below the lesson, so only one can be open
+  // at a time — opening either closes the other.
+  function toggleFlashcards() {
+    setFlashcardsOpen((open) => !open);
+    setQuizOpen(false);
+  }
+  function toggleQuiz() {
+    setQuizOpen((open) => !open);
+    setFlashcardsOpen(false);
+  }
+
+  // On mount, ask the cache (GET — no key, no Claude call) whether cards already
+  // exist for this source. If they do, show them instantly so a returning
+  // student doesn't regenerate. A miss leaves `flashcards` null → Generate bar.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCachedFlashcards() {
+      try {
+        const res = await fetch(
+          `/api/flashcards?source=${encodeURIComponent(source)}`,
+        );
+        if (!res.ok) return;
+        const data: { cards?: Flashcard[] | null } = await res.json();
+        if (!cancelled && Array.isArray(data.cards) && data.cards.length > 0) {
+          setFlashcards(data.cards);
+        }
+      } catch {
+        // Cache read failed — not fatal; the student can still generate.
+      }
+    }
+    loadCachedFlashcards();
+    // Guard against a late response resolving after the view unmounts.
+    return () => {
+      cancelled = true;
+    };
+  }, [source]);
+
+  // ── Generate flashcards ─────────────────────────────────────────────────--
+  // POST the source (+ the Anthropic key from localStorage) to /api/flashcards.
+  // On success the Generate bar is replaced by the rendered cards.
+  async function generateFlashcards() {
+    if (isFlashcardsLoading) return;
+
+    const apiKey = localStorage.getItem("phi_anthropic_key");
+    if (!apiKey) {
+      setFlashcardsError("Add your Anthropic API key in Account to generate flashcards.");
+      return;
+    }
+
+    setFlashcardsError("");
+    setIsFlashcardsLoading(true);
+    try {
+      const res = await fetch("/api/flashcards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source, apiKey }),
+      });
+      const data: { cards?: Flashcard[]; error?: string } = await res.json();
+      if (!res.ok) {
+        setFlashcardsError(
+          data.error || "Could not generate flashcards. Please try again.",
+        );
+        return;
+      }
+      setFlashcards(data.cards ?? []);
+    } catch {
+      setFlashcardsError("Network error. Check your connection and try again.");
+    } finally {
+      setIsFlashcardsLoading(false);
+    }
+  }
+
+  // ── Load cached quiz on mount ───────────────────────────────────────────--
+  // Same as the flashcards cache load: a keyless GET so a returning student sees
+  // their quiz instantly without regenerating (or spending tokens) on a miss.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCachedQuiz() {
+      try {
+        const res = await fetch(`/api/quiz?source=${encodeURIComponent(source)}`);
+        if (!res.ok) return;
+        const data: { questions?: QuizQuestion[] | null } = await res.json();
+        if (!cancelled && Array.isArray(data.questions) && data.questions.length > 0) {
+          setQuiz(data.questions);
+        }
+      } catch {
+        // Cache read failed — not fatal; the student can still generate.
+      }
+    }
+    loadCachedQuiz();
+    return () => {
+      cancelled = true;
+    };
+  }, [source]);
+
+  // ── Generate quiz ───────────────────────────────────────────────────────--
+  // POST the source (+ the Anthropic key from localStorage) to /api/quiz. On
+  // success the Generate button is replaced by the runnable quiz.
+  async function generateQuiz() {
+    if (isQuizLoading) return;
+
+    const apiKey = localStorage.getItem("phi_anthropic_key");
+    if (!apiKey) {
+      setQuizError("Add your Anthropic API key in Account to generate a quiz.");
+      return;
+    }
+
+    // Collapse the type toggles into the array the route expects. At least one
+    // type must be on, or there's nothing to generate.
+    const types = Object.entries(quizTypes)
+      .filter(([, on]) => on)
+      .map(([type]) => type);
+    if (types.length === 0) {
+      setQuizError("Pick at least one question type.");
+      return;
+    }
+
+    setQuizError("");
+    setIsQuizLoading(true);
+    try {
+      const res = await fetch("/api/quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source, apiKey, count: quizCount, types }),
+      });
+      const data: { questions?: QuizQuestion[]; error?: string } = await res.json();
+      if (!res.ok) {
+        setQuizError(data.error || "Could not generate a quiz. Please try again.");
+        return;
+      }
+      setQuiz(data.questions ?? []);
+    } catch {
+      setQuizError("Network error. Check your connection and try again.");
+    } finally {
+      setIsQuizLoading(false);
+    }
+  }
+
+  // ── Send a chat message ─────────────────────────────────────────────────--
+  // Optimistically renders the student's message, then opens the streaming
+  // response and grows the assistant's reply token-by-token.
+  async function sendMessage() {
+    const trimmed = chatInput.trim();
+    // Bail on empty input or while a request is already running.
+    if (trimmed.length === 0 || isChatLoading) return;
+
+    // The key lives in localStorage (same as the lesson request). If it's gone
+    // (cleared since the lesson loaded), show that as an assistant message
+    // rather than firing a request we know will fail.
+    const apiKey = localStorage.getItem("phi_anthropic_key");
+    if (!apiKey) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: trimmed },
+        {
+          role: "assistant",
+          content: "Add your Anthropic API key in Settings to chat.",
+        },
+      ]);
+      setChatInput("");
+      return;
+    }
+
+    // Snapshot the history we'll SEND: everything so far, BEFORE this new turn.
+    // The route appends the new message itself, so `history` must not include
+    // it — otherwise the question would be duplicated in the prompt.
+    const history = messages;
+
+    // Optimistic update: show the student's message immediately. We don't wait
+    // for the network — the UI should feel instant.
+    const userMessage: Message = { role: "user", content: trimmed };
+    setMessages((prev) => [...prev, userMessage]);
+    setChatInput("");
+    setIsChatLoading(true);
+
+    try {
+      const depth = localStorage.getItem(EXPLANATION_DEPTH_KEY);
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: trimmed, source, history, apiKey, depth }),
+      });
+
+      // Errors come back as JSON (the route returns JSON { error } for any
+      // failure that happens before streaming begins — bad key, no quota, etc).
+      // A successful streamed reply is text/plain, so we branch on Content-Type.
+      const contentType = res.headers.get("Content-Type") ?? "";
+
+      if (!res.ok || contentType.includes("application/json")) {
+        const data: { error?: string } = await res.json().catch(() => ({}));
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: data.error || "Something went wrong. Please try again.",
+          },
+        ]);
+        return;
+      }
+
+      // Streaming success. We have no body reader = treat as empty reply.
+      if (!res.body) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Phi sent an empty reply. Please try again." },
+        ]);
+        return;
+      }
+
+      // Add an empty assistant message we'll grow as tokens arrive. We update
+      // the SAME message in place (replacing the LAST item) rather than
+      // appending a new bubble per token. Updating "the last message" instead
+      // of a captured index keeps this correct even if state shifts — and only
+      // one send can be in flight at a time (isChatLoading guards it), so the
+      // last message is always this turn's assistant reply.
+      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+      // Read the text/plain stream chunk-by-chunk. `TextDecoder` with
+      // `stream: true` correctly handles multi-byte characters that get split
+      // across chunk boundaries.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        // Replace the last message (the assistant placeholder) with everything
+        // received so far.
+        setMessages((prev) => {
+          const next = [...prev];
+          next[next.length - 1] = { role: "assistant", content: accumulated };
+          return next;
+        });
+      }
+    } catch {
+      // The fetch itself failed (network down). Distinct from a server-returned
+      // error status, which we handled above as JSON.
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Network error. Check your connection and try again.",
+        },
+      ]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  }
+
+  // ── Read-aloud handlers ─────────────────────────────────────────────────--
+  // Turn the lesson markdown into plain prose for the voice. A speech synthesizer
+  // reads text literally, so leaving "##" or "**" in would make it speak the
+  // symbols. A light strip — enough to sound natural, not a full markdown parser.
+  function stripMarkdown(md: string): string {
+    return md
+      .replace(/```[\s\S]*?```/g, "") // fenced code blocks — don't read code aloud
+      .replace(/`([^`]+)`/g, "$1") // inline code → its contents
+      .replace(/^#{1,6}\s+/gm, "") // heading markers
+      .replace(/(\*\*|__)(.*?)\1/g, "$2") // bold
+      .replace(/(\*|_)(.*?)\1/g, "$2") // italic
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // images
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // links → link text
+      .replace(/^>\s?/gm, "") // blockquote markers
+      .replace(/^[-*+]\s+/gm, "") // bullet markers
+      .replace(/^\d+\.\s+/gm, "") // numbered-list markers
+      .replace(/^[-*_]{3,}\s*$/gm, "") // horizontal rules
+      .replace(/\n{3,}/g, "\n\n") // collapse big gaps
+      .trim();
+  }
+
+  // Play (or resume) the read-aloud.
+  //   - If speech is currently PAUSED, resume from where it left off.
+  //   - If it's already speaking, do nothing.
+  //   - Otherwise build a fresh utterance and start from the top.
+  // The spec said "create an utterance and speak()", but doing that blindly on
+  // every Play press would restart (or stack a second reading) after a pause.
+  // Resuming when paused is what makes the play/pause button behave like a real
+  // player.
+  function playAudio() {
+    // Defensive: the button is disabled when speech is unsupported, but guard
+    // anyway so this can never throw on a missing API.
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const synth = window.speechSynthesis;
+
+    // Mid-read and paused → resume. No new utterance.
+    if (synth.paused && synth.speaking) {
+      synth.resume();
+      setIsPlaying(true);
+      return;
+    }
+    // Already speaking (and not paused) → nothing to do.
+    if (synth.speaking) return;
+
+    // EDGE CASE: a lesson with no speakable text (e.g. only code blocks, which
+    // stripMarkdown removes) would produce a silent utterance whose `onend` may
+    // never fire — leaving the icon stuck on Pause with nothing playing. Bail
+    // before we flip to the "playing" state so the button can't lie.
+    const text = stripMarkdown(lesson);
+    if (!text) return;
+
+    // Fresh start. Cancel anything stale first so we never queue two readings.
+    synth.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.95; // a touch slower than default — easier to follow
+    utterance.pitch = 1.0; // natural pitch
+    // onend is the one transition the user doesn't trigger by hand: it fires
+    // both when the lesson finishes on its own AND when Stop cancels it, so it's
+    // where we flip the icon back to ▶.
+    utterance.onend = () => setIsPlaying(false);
+    // EDGE CASE: if synthesis errors (voice fails to load, interrupted, etc.)
+    // `onend` won't fire — reset here too so the icon doesn't stay on Pause.
+    utterance.onerror = () => setIsPlaying(false);
+
+    utteranceRef.current = utterance;
+    synth.speak(utterance);
+    setIsPlaying(true);
+  }
+
+  // Pause without losing position — Play resumes from here.
+  function pauseAudio() {
+    window.speechSynthesis.pause();
+    setIsPlaying(false);
+  }
+
+  // ── No API key ────────────────────────────────────────────────────────────
+  // The student can't generate anything without a key. Send them to Settings
+  // with a clear, gold-accented link (the accent is reserved for the primary
+  // action on the screen).
+  if (status === "no-key") {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-6 py-12 text-center">
+        <span
+          aria-hidden="true"
+          className="text-4xl font-extralight leading-none text-accent"
+        >
+          φ
+        </span>
+        <p className="mt-6 text-sm text-muted">
+          Add your Anthropic API key in{" "}
+          <Link
+            href="/account"
+            className="font-medium text-accent underline-offset-4 hover:underline"
+          >
+            Account
+          </Link>{" "}
+          to start learning
+        </p>
+      </div>
+    );
+  }
+
+  // ── Loading ─────────────────────────────────────────────────────────────--
+  // Extracted to its own component because it owns a ticking interval (the
+  // rotating status line), and hooks can't live inside this conditional branch.
+  if (status === "loading") {
+    return <LessonLoading />;
+  }
+
+  // ── Error ───────────────────────────────────────────────────────────────--
+  // Show the message the server (or our catch block) produced. `role="alert"`
+  // makes screen readers announce it. Red-tinted text signals failure without
+  // breaking the dark theme.
+  if (status === "error") {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-6 py-12 text-center">
+        <p role="alert" className="text-sm text-red-400">
+          {errorMessage}
+        </p>
+      </div>
+    );
+  }
+
+  // ── Done: render the lesson ─────────────────────────────────────────────--
+  // `react-markdown` turns the markdown string into real HTML elements (h1, h2,
+  // p, ul, …). We DON'T have the @tailwindcss/typography plugin installed, so
+  // instead of `prose` classes we style those generated elements directly using
+  // Tailwind's arbitrary-variant child selectors on the wrapper:
+  //
+  //     [&_h1]:text-3xl   →  applies text-3xl to every <h1> inside this div
+  //
+  // This keeps all the lesson typography in one place (this className) and needs
+  // no extra dependency. If we add @tailwindcss/typography later, this can be
+  // swapped for a single `prose prose-invert` class.
+  // Two-column layout: lesson on the left, chat sidebar on the right.
+  //
+  //   - `flex-col lg:flex-row` → stacked on mobile (lesson, then chat below),
+  //     side-by-side from the `lg` breakpoint up.
+  //   - The lesson <main> takes 2/3 of the width on desktop, the <aside> 1/3.
+  //   - On desktop the sidebar is `sticky top-0 h-screen` so it stays in view
+  //     and scrolls its OWN message list while the lesson scrolls the page.
+  //     On mobile it has natural height and just sits under the lesson.
+  //
+  // Split the lesson into its title and the rest. Claude opens every lesson with
+  // a single `# Heading` line; we pull that out so the read-aloud bar can sit
+  // directly BELOW the title (per spec) instead of above all the content. If the
+  // first line isn't a heading (defensive), title is empty and the whole string
+  // renders as body — the bar then just sits at the top.
+  const firstNewline = lesson.indexOf("\n");
+  const firstLine = firstNewline === -1 ? lesson : lesson.slice(0, firstNewline);
+  const isTitleLine = /^#\s+/.test(firstLine.trim());
+  const lessonTitle = isTitleLine ? firstLine.trim().replace(/^#\s+/, "") : "";
+  const lessonBody = isTitleLine ? lesson.slice(firstNewline + 1).trimStart() : lesson;
+
+  return (
+    <div className="flex min-h-screen flex-col lg:flex-row">
+      {/* Left: the taught lesson. The article keeps all the markdown typography
+          from before; we only swapped its page-spanning `mx-auto max-w-3xl` for
+          `flex-1` + an inner max-width so it reads well inside the 2/3 column. */}
+      <main className="flex-1 lg:w-2/3">
+        <article
+          className="
+            mx-auto max-w-3xl px-6 py-12 leading-relaxed text-text
+            [&_h1]:mb-4 [&_h1]:mt-2 [&_h1]:text-3xl [&_h1]:font-semibold [&_h1]:tracking-tight [&_h1]:text-text
+            [&_h2]:mb-3 [&_h2]:mt-10 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:tracking-tight [&_h2]:text-text
+            [&_h3]:mb-2 [&_h3]:mt-8 [&_h3]:text-xl [&_h3]:font-medium [&_h3]:text-text
+            [&_p]:my-4 [&_p]:text-base [&_p]:text-text/90
+            [&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:text-text/90
+            [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:text-text/90
+            [&_li]:my-1
+            [&_strong]:font-semibold [&_strong]:text-text
+            [&_em]:italic
+            [&_a]:text-accent [&_a]:underline-offset-4 hover:[&_a]:underline
+            [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-accent/40 [&_blockquote]:pl-4 [&_blockquote]:text-muted [&_blockquote]:italic
+            [&_code]:rounded [&_code]:bg-surface [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm [&_code]:text-accent
+            [&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-white/10 [&_pre]:bg-surface [&_pre]:p-4
+            [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-text
+            [&_hr]:my-8 [&_hr]:border-white/10
+          "
+        >
+          {/* Title rendered manually (not by ReactMarkdown) so the read-aloud
+              bar can sit directly beneath it. Uses the same look the markdown h1
+              had. If there's no detected title, this collapses to nothing. */}
+          {lessonTitle && (
+            <h1 className="mb-4 mt-2 text-3xl font-semibold tracking-tight text-text">
+              {lessonTitle}
+            </h1>
+          )}
+
+          <ReactMarkdown>{lessonBody}</ReactMarkdown>
+        </article>
+
+        {/* ── Flashcards panel ───────────────────────────────────────────────
+            Toggled open/closed by the floating action bar's grid button. When
+            open it shows the generated cards, or a Generate button if there are
+            none yet. `pb-28` clears the floating bar so the last card isn't
+            hidden behind it. */}
+        {flashcardsOpen && (
+          <SpringIn>
+          <section className="mx-auto max-w-3xl px-6 pb-28">
+            {flashcards && flashcards.length > 0 ? (
+              <>
+                <h2 className="mb-1 text-2xl font-semibold tracking-tight text-text">
+                  Flashcards
+                </h2>
+                <p className="mb-6 text-sm text-muted">Click a card to flip it.</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {flashcards.map((card, i) => (
+                    <FlipCard key={i} front={card.front} back={card.back} />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-2 py-8">
+                <button
+                  type="button"
+                  onClick={generateFlashcards}
+                  disabled={isFlashcardsLoading}
+                  className="
+                    flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-5 py-2.5
+                    text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95
+                    disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none
+                  "
+                >
+                  {isFlashcardsLoading ? (
+                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    "Generate flashcards"
+                  )}
+                </button>
+                {flashcardsError && (
+                  <p role="alert" className="text-xs text-red-400">
+                    {flashcardsError}
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
+          </SpringIn>
+        )}
+
+        {/* ── Quiz panel ─────────────────────────────────────────────────────
+            Toggled by the floating bar's cap button, mutually exclusive with the
+            flashcards panel. Shows the runnable quiz, or a Generate button if
+            none exists yet. `pb-28` clears the floating bar. */}
+        {quizOpen && (
+          <SpringIn>
+          <section className="mx-auto max-w-3xl px-6 pb-28">
+            {quiz && quiz.length > 0 ? (
+              <>
+                <h2 className="mb-1 text-2xl font-semibold tracking-tight text-text">
+                  Quiz
+                </h2>
+                <p className="mb-6 text-sm text-muted">
+                  Test what you&apos;ve learned.
+                </p>
+                <QuizRunner questions={quiz} />
+              </>
+            ) : (
+              <QuizConfig
+                count={quizCount}
+                setCount={setQuizCount}
+                types={quizTypes}
+                setTypes={setQuizTypes}
+                onGenerate={generateQuiz}
+                isLoading={isQuizLoading}
+                error={quizError}
+              />
+            )}
+          </section>
+          </SpringIn>
+        )}
+      </main>
+
+      {/* Right: the chat sidebar. `bg-surface` lifts it off the page bg; the
+          left border is a quiet divider. On desktop it's a fixed-height column
+          (`lg:h-screen lg:sticky lg:top-0`) split into three stacked rows:
+          header, scrollable message list, and the input. `flex flex-col`
+          makes the middle row (`flex-1 overflow-y-auto`) absorb the leftover
+          height so the header and input stay pinned. */}
+      {chatOpen && (
+      <aside
+        className="
+          flex flex-col border-t border-white/[0.055] bg-white/[0.025] backdrop-blur-xl
+          lg:h-[calc(100vh-4rem)] lg:w-1/3 lg:sticky lg:top-16 lg:border-l lg:border-l-white/[0.055] lg:border-t-0
+        "
+      >
+        {/* Header */}
+        <div className="flex items-center gap-2 border-b border-white/10 px-5 py-4">
+          <span aria-hidden="true" className="text-xs leading-none text-accent">✦</span>
+          <h2 className="text-sm font-medium text-muted">Ask</h2>
+        </div>
+
+        {/* Message list — the only scrollable region. `flex-1` lets it eat the
+            remaining height; `overflow-y-auto` scrolls just the messages. On
+            mobile we cap it so the sidebar doesn't grow unbounded down the page. */}
+        <div className="max-h-[60vh] flex-1 space-y-4 overflow-y-auto px-5 py-4 lg:max-h-none">
+          {messages.length === 0 ? (
+            // Empty state: a quiet hint, not a loud empty card.
+            <p className="text-sm leading-relaxed text-muted">
+              Stuck on something? Ask a question, request a simpler explanation,
+              or skip ahead.
+            </p>
+          ) : (
+            messages.map((m, i) =>
+              m.role === "user" ? (
+                // User: right-aligned, faint accent-tinted bubble. Wrapped in
+                // MessageIn so it fades + slides in on arrival.
+                <MessageIn key={i}>
+                  <div className="flex justify-end">
+                    <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-accent/10 px-3.5 py-2 text-sm leading-relaxed text-text">
+                      {m.content}
+                    </p>
+                  </div>
+                </MessageIn>
+              ) : (
+                // Assistant: left-aligned, markdown-rendered. Same ReactMarkdown
+                // used for the lesson, but with lighter chat-appropriate styles
+                // (tighter spacing, smaller code blocks). Empty content while
+                // streaming shows a pulsing placeholder. The bubble animates in
+                // once (the empty placeholder mounts inside MessageIn); streamed
+                // tokens update it in place without re-triggering the entrance.
+                <MessageIn key={i}>
+                  <div className="text-sm leading-relaxed text-text">
+                  {m.content.length > 0 ? (
+                    <div
+                      className="
+                        [&_p]:my-1 [&_p]:text-sm [&_p]:leading-relaxed
+                        [&_strong]:font-semibold [&_em]:italic
+                        [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4
+                        [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4
+                        [&_li]:my-0.5
+                        [&_code]:rounded [&_code]:bg-background [&_code]:px-1 [&_code]:py-px [&_code]:font-mono [&_code]:text-xs [&_code]:text-accent
+                        [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-background [&_pre]:p-3
+                        [&_pre_code]:bg-transparent [&_pre_code]:p-0
+                        [&_blockquote]:border-l-2 [&_blockquote]:border-accent/40 [&_blockquote]:pl-3 [&_blockquote]:text-muted [&_blockquote]:italic
+                      "
+                    >
+                      <ReactMarkdown>{m.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <span className="text-muted animate-pulse">Phi is thinking…</span>
+                  )}
+                  </div>
+                </MessageIn>
+              ),
+            )
+          )}
+          {/* Scroll anchor — kept at the very bottom so auto-scroll lands here. */}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input row. Enter sends; Shift+Enter inserts a newline. The textarea
+            is single-line by default (`rows={1}`) and we block resizing so the
+            layout stays predictable. */}
+        <div className="border-t border-white/10 p-3">
+          <div className="flex items-end gap-2">
+            <textarea
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter sends, Shift+Enter = newline. We preventDefault on the
+                // plain Enter so it doesn't also insert a line break.
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              rows={3}
+              disabled={isChatLoading}
+              placeholder="Ask Phi anything…"
+              aria-label="Ask Phi a question about this lesson"
+              className="
+                max-h-32 flex-1 resize-none rounded-xl border border-white/10 bg-background
+                px-3.5 py-2.5 text-sm leading-relaxed text-text placeholder:text-muted
+                focus:border-accent/50 focus:outline-none
+                disabled:cursor-not-allowed disabled:opacity-50
+              "
+            />
+            <button
+              type="button"
+              onClick={sendMessage}
+              disabled={isChatLoading || chatInput.trim().length === 0}
+              aria-label="Send message"
+              className="
+                cursor-pointer shrink-0 rounded-xl bg-accent px-3.5 py-2.5 text-sm font-medium text-background
+                transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95
+                disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none
+              "
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      </aside>
+      )}
+
+      {/* ── Floating action bar ─────────────────────────────────────────────
+          An elevated glass pill pinned to the bottom-centre of the viewport.
+          Four controls: toggle flashcards, toggle quiz, play/pause read-aloud,
+          toggle chat. `fixed` lifts it out of flow so it floats over both
+          columns. The Spades glass surface (`glass-standard`) + layered
+          `shadow-card` plus a hairline `ring-white/5` lift it off the page so it
+          reads as floating above the content, not welded to the bottom edge,
+          and `rounded-full` makes it a true pill. While flashcards or the
+          quiz are generating, the quiet white ring
+          swaps for a pulsing amber one (ring-2 ring-amber-400/60 animate-pulse)
+          so the whole bubble glows as a "working" cue; `transition-all` smooths
+          the swap back to rest. (I intentionally did NOT add `relative` here:
+          `fixed` already establishes the positioning context, and Tailwind emits
+          `relative` after `fixed`, so adding both would override the fixed pin
+          and the bar would scroll away.) */}
+      <div
+        className={`glass-standard shadow-card fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-8 rounded-full px-8 py-4 transition-all duration-200 hover:scale-105 ${
+          isFlashcardsLoading || isQuizLoading
+            ? "animate-pulse ring-2 ring-amber-400/60"
+            : "ring-1 ring-white/5"
+        }`}
+      >
+        {/* Flashcards toggle — amber when the panel is open, otherwise a quiet
+            white/60 that brightens on hover. Opening it closes the quiz. */}
+        <button
+          type="button"
+          onClick={toggleFlashcards}
+          aria-label="Toggle flashcards"
+          aria-pressed={flashcardsOpen}
+          className="cursor-pointer transition-transform active:scale-95"
+        >
+          <Squares2X2Icon
+            className={`h-5 w-5 transition-colors ${
+              flashcardsOpen ? "text-amber-400" : "text-white/60 hover:text-white"
+            }`}
+          />
+        </button>
+
+        {/* Quiz toggle — same amber/white treatment. Opening it closes the
+            flashcards panel (they share the space below the lesson). */}
+        <button
+          type="button"
+          onClick={toggleQuiz}
+          aria-label="Toggle quiz"
+          aria-pressed={quizOpen}
+          className="cursor-pointer transition-transform active:scale-95"
+        >
+          <AcademicCapIcon
+            className={`h-5 w-5 transition-colors ${
+              quizOpen ? "text-amber-400" : "text-white/60 hover:text-white"
+            }`}
+          />
+        </button>
+
+        {/* Play/Pause read-aloud — the existing Web Speech logic. Gold (amber)
+            while actually playing, quiet white/60 when idle, dimmed if the
+            browser can't speak at all. */}
+        <button
+          type="button"
+          onClick={isPlaying ? pauseAudio : playAudio}
+          disabled={!supportsSpeech}
+          aria-label={isPlaying ? "Pause read-aloud" : "Play read-aloud"}
+          className="cursor-pointer transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          {isPlaying ? (
+            <PauseIcon className="h-5 w-5 text-amber-400" />
+          ) : (
+            <PlayIcon className="h-5 w-5 text-white/60 transition-colors hover:text-white" />
+          )}
+        </button>
+
+        {/* Chat toggle — amber when the sidebar is expanded. */}
+        <button
+          type="button"
+          onClick={() => setChatOpen((open) => !open)}
+          aria-label="Toggle chat"
+          aria-pressed={chatOpen}
+          className="cursor-pointer transition-transform active:scale-95"
+        >
+          <ChatBubbleLeftIcon
+            className={`h-5 w-5 transition-colors ${
+              chatOpen ? "text-amber-400" : "text-white/60 hover:text-white"
+            }`}
+          />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── SpringIn ──────────────────────────────────────────────────────────────--
+// Wraps its children in a one-shot entrance: they mount hidden (faded out and
+// nudged 4px down), then on the next animation frame transition into place. The
+// flip deliberately lives in a CHILD component, not the parent, because this
+// wrapper mounts and unmounts WITH the flashcards panel — so every time the
+// panel opens the entrance replays, and the "have I animated yet?" state resets
+// itself simply by unmounting (no effect cleanup needed to reset it).
+//
+// Why requestAnimationFrame instead of setting state straight in the effect:
+//   1. It defers the flip to AFTER the browser has painted the hidden state, so
+//      the transition actually has a "from" frame to animate out of (set it in
+//      the same tick and the element would just appear already-visible).
+//   2. setState inside an rAF callback isn't a synchronous effect-body update,
+//      so it sidesteps React's "avoid setState directly within an effect" rule.
+function SpringIn({ children }: { children: ReactNode }) {
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  return (
+    <div
+      className={`transition-all duration-300 ease-out ${
+        shown ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── MessageIn ───────────────────────────────────────────────────────────────
+// A chat-bubble entrance: mounts faded + nudged 1px down, then flips into place
+// on the next animation frame. Same rAF trick as SpringIn (defer the flip past
+// the first paint so the transition has a "from" frame, and keep the setState
+// out of a synchronous effect body), just tuned snappier — 200ms — for chat.
+//
+// Each message in the list wraps in one of these, keyed by index. New messages
+// get a fresh key → mount → animate once. The streaming assistant reply keeps
+// the SAME key while its text grows, so it stays mounted and never re-animates
+// mid-stream — only the bubble's first appearance plays the entrance.
+function MessageIn({ children }: { children: ReactNode }) {
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  return (
+    <div
+      className={`transition-all duration-200 ease-out ${
+        shown ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── LessonLoading ───────────────────────────────────────────────────────────
+// The screen shown while /api/lesson is generating. Three parts:
+//   1. a gold φ that spins like a loader (the brand mark doubling as the
+//      spinner — on-brand, no extra asset),
+//   2. a status line that cycles every 2s so the wait feels narrated rather than
+//      stalled, and
+//   3. a skeleton of the lesson layout that pulses in a slightly lighter shade.
+// It's its own component because the cycling line needs state + an interval, and
+// React hooks can't be called inside LessonView's conditional `status` branches.
+const LOADING_MESSAGES = [
+  "Reading your material…",
+  "Building your lesson…",
+  "Almost ready…",
+];
+
+function LessonLoading() {
+  // Which status line is showing. Advances on a 2s interval, wrapping back to
+  // the start — so on a long generation it keeps cycling rather than getting
+  // stuck on "Almost ready…".
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setPhase((p) => (p + 1) % LOADING_MESSAGES.length);
+    }, 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div
+      aria-label="Loading lesson…"
+      aria-busy="true"
+      className="mx-auto max-w-3xl px-6 py-12"
+    >
+      {/* φ spinner + rotating status line. The φ is 1.5rem (text-2xl) and spins;
+          the line is keyed on `phase` so each new message replays the page-in
+          fade as it swaps. */}
+      <div className="flex flex-col items-center gap-3 pb-12 text-center">
+        <span
+          aria-hidden="true"
+          className="animate-spin text-2xl font-extralight leading-none text-accent"
+        >
+          φ
+        </span>
+        <p key={phase} className="animate-page-in text-sm text-muted">
+          {LOADING_MESSAGES[phase]}
+        </p>
+      </div>
+
+      {/* Skeleton — mirrors the lesson's shape (title, subtitle, three sections)
+          so the real content lands roughly where the bars were. bg-zinc-800 is a
+          touch lighter than the page so the pulse reads clearly on the dark base. */}
+      <div className="animate-pulse">
+        <div className="h-9 w-2/3 rounded bg-zinc-800" />
+        <div className="mt-4 h-5 w-1/2 rounded bg-zinc-800" />
+
+        <div className="mt-12 h-6 w-2/5 rounded bg-zinc-800" />
+        <div className="mt-4 space-y-2">
+          <div className="h-4 w-full rounded bg-zinc-800" />
+          <div className="h-4 w-full rounded bg-zinc-800" />
+          <div className="h-4 w-4/5 rounded bg-zinc-800" />
+        </div>
+
+        <div className="mt-10 h-6 w-1/3 rounded bg-zinc-800" />
+        <div className="mt-4 space-y-2">
+          <div className="h-4 w-full rounded bg-zinc-800" />
+          <div className="h-4 w-11/12 rounded bg-zinc-800" />
+          <div className="h-4 w-3/4 rounded bg-zinc-800" />
+        </div>
+
+        <div className="mt-10 h-6 w-2/5 rounded bg-zinc-800" />
+        <div className="mt-4 space-y-2">
+          <div className="h-4 w-full rounded bg-zinc-800" />
+          <div className="h-4 w-5/6 rounded bg-zinc-800" />
+          <div className="h-4 w-full rounded bg-zinc-800" />
+          <div className="h-4 w-2/3 rounded bg-zinc-800" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── FlipCard ────────────────────────────────────────────────────────────────
+// A single flashcard. Clicking it flips between the question (front) and the
+// answer (back) with a real 3D rotation. We use arbitrary CSS properties
+// ([transform-style:preserve-3d], [backface-visibility:hidden], rotateY) so the
+// flip works regardless of which named 3D utilities Tailwind has enabled. Both
+// faces are absolutely positioned inside a fixed-height button, so the back
+// doesn't need to match the front's length to line up. The back is gold-accented
+// — the "flipped/active" cue the spec calls for. Each card owns its own flip
+// state, so flipping one doesn't touch the others.
+function FlipCard({ front, back }: Flashcard) {
+  const [flipped, setFlipped] = useState(false);
+  // Whether either face's text is taller than the card can show (so we offer the
+  // "expand" affordance), and whether the full-text modal is open.
+  const [overflows, setOverflows] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const frontRef = useRef<HTMLParagraphElement>(null);
+  const backRef = useRef<HTMLParagraphElement>(null);
+
+  // Detect overflow by comparing each clamped face's full content height
+  // (scrollHeight) against its visible height (clientHeight). line-clamp-6 caps
+  // the visible height at 6 lines, so a longer answer makes scrollHeight win. A
+  // ResizeObserver re-checks when the web font swaps in or the column reflows,
+  // both of which can change the line count. The +1 absorbs sub-pixel rounding.
+  useEffect(() => {
+    const f = frontRef.current;
+    const b = backRef.current;
+    if (!f && !b) return;
+
+    const check = () => {
+      const over =
+        (!!f && f.scrollHeight > f.clientHeight + 1) ||
+        (!!b && b.scrollHeight > b.clientHeight + 1);
+      setOverflows(over);
+    };
+    check();
+
+    const ro = new ResizeObserver(check);
+    if (f) ro.observe(f);
+    if (b) ro.observe(b);
+    return () => ro.disconnect();
+  }, [front, back]);
+
+  // While the modal is open: close on Escape and lock background scroll so the
+  // page behind doesn't move under the overlay.
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpanded(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [expanded]);
+
+  return (
+    // A positioning wrapper so the ellipsis can sit OUTSIDE the flip <button>
+    // (a button can't legally nest another button) yet overlap its corner.
+    <div className="relative h-44 w-full">
+      <button
+        type="button"
+        onClick={() => setFlipped((f) => !f)}
+        aria-pressed={flipped}
+        className="h-full w-full cursor-pointer text-left [perspective:1000px]"
+      >
+        <div
+          className={`
+            relative h-full w-full rounded-2xl transition-transform duration-300
+            [transform-style:preserve-3d]
+            ${flipped ? "[transform:rotateY(180deg)]" : ""}
+          `}
+        >
+          {/* Front — the question/term. */}
+          <div className="absolute inset-0 flex flex-col justify-center gap-2 overflow-hidden rounded-2xl border border-white/10 bg-surface p-5 [backface-visibility:hidden]">
+            <span className="text-xs uppercase tracking-wide text-muted">Question</span>
+            <p ref={frontRef} className="line-clamp-6 text-sm leading-relaxed text-text">
+              {front}
+            </p>
+          </div>
+
+          {/* Back — the answer/definition. Pre-rotated 180° so it reads correctly
+              once the card flips, and gold-accented to signal the flipped state. */}
+          <div className="absolute inset-0 flex flex-col justify-center gap-2 overflow-hidden rounded-2xl border border-accent/60 bg-accent/5 p-5 [transform:rotateY(180deg)] [backface-visibility:hidden]">
+            <span className="text-xs uppercase tracking-wide text-accent">Answer</span>
+            <p ref={backRef} className="line-clamp-6 text-sm leading-relaxed text-text">
+              {back}
+            </p>
+          </div>
+        </div>
+      </button>
+
+      {/* Expand affordance — only when a face is truncated. Sits above the card
+          (z-10) and is a sibling of the flip button, so clicking it opens the
+          modal without also flipping the card. */}
+      {overflows && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(true);
+          }}
+          aria-label="Show full flashcard"
+          className="absolute bottom-2 right-2 z-10 rounded-full bg-white/10 p-1 text-white/70 backdrop-blur-sm transition-colors hover:bg-white/20 hover:text-white"
+        >
+          <EllipsisHorizontalIcon className="h-4 w-4" />
+        </button>
+      )}
+
+      {/* Full-text modal — portaled to <body> so its fixed positioning anchors to
+          the viewport, not to PageTransition's lingering transform. Only ever
+          rendered after a client click (expanded starts false), so document.body
+          is guaranteed present — no SSR guard needed. */}
+      {expanded &&
+        createPortal(
+          <div
+            onClick={() => setExpanded(false)}
+            className="animate-overlay-in fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Flashcard"
+              onClick={(e) => e.stopPropagation()}
+              className="animate-modal-in relative w-full max-w-lg rounded-3xl border border-white/10 bg-zinc-900/90 p-8 shadow-2xl backdrop-blur-xl"
+            >
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                aria-label="Close"
+                className="absolute right-4 top-4 rounded-full p-1 text-muted transition-colors hover:text-text"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+
+              <div className="space-y-6">
+                <div>
+                  <span className="text-xs uppercase tracking-wide text-muted">
+                    Question
+                  </span>
+                  <p className="mt-2 text-sm leading-relaxed text-text">{front}</p>
+                </div>
+                <div className="h-px w-full bg-white/10" />
+                <div>
+                  <span className="text-xs uppercase tracking-wide text-accent">
+                    Answer
+                  </span>
+                  <p className="mt-2 text-sm leading-relaxed text-text">{back}</p>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+// ── QuizConfig ──────────────────────────────────────────────────────────────
+// The step shown before a quiz exists: choose how many questions (3–10) and
+// which types, then Generate. Replaces the old lone "Generate quiz" button. The
+// count/type state it edits is owned by LessonView (so generateQuiz can read it);
+// this component is just the form.
+type QuizTypeToggles = { multiple_choice: boolean; short_answer: boolean };
+
+function QuizConfig({
+  count,
+  setCount,
+  types,
+  setTypes,
+  onGenerate,
+  isLoading,
+  error,
+}: {
+  count: number;
+  setCount: (n: number) => void;
+  types: QuizTypeToggles;
+  setTypes: (t: QuizTypeToggles) => void;
+  onGenerate: () => void;
+  isLoading: boolean;
+  error: string;
+}) {
+  const MIN = 3;
+  const MAX = 10;
+
+  return (
+    <div className="mx-auto flex max-w-sm flex-col gap-6 py-8">
+      {/* Question-count stepper. Clamped to 3–10; the buttons disable at the
+          ends rather than wrapping. */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-text">Questions</span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setCount(Math.max(MIN, count - 1))}
+            disabled={count <= MIN}
+            aria-label="Fewer questions"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/10 text-text transition-colors hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            −
+          </button>
+          <span
+            aria-live="polite"
+            className="w-6 text-center text-sm tabular-nums text-text"
+          >
+            {count}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCount(Math.min(MAX, count + 1))}
+            disabled={count >= MAX}
+            aria-label="More questions"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/10 text-text transition-colors hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      {/* Question types — independent toggles. Real checkboxes for free
+          keyboard + screen-reader support; accent-color tints the check. */}
+      <div className="flex flex-col gap-3">
+        <span className="text-sm text-text">Question types</span>
+        <label className="flex cursor-pointer items-center gap-3 text-sm text-text">
+          <input
+            type="checkbox"
+            checked={types.multiple_choice}
+            onChange={() =>
+              setTypes({ ...types, multiple_choice: !types.multiple_choice })
+            }
+            className="h-4 w-4 cursor-pointer rounded border-white/20 bg-background accent-accent"
+          />
+          Multiple choice
+        </label>
+        <label className="flex cursor-pointer items-center gap-3 text-sm text-text">
+          <input
+            type="checkbox"
+            checked={types.short_answer}
+            onChange={() =>
+              setTypes({ ...types, short_answer: !types.short_answer })
+            }
+            className="h-4 w-4 cursor-pointer rounded border-white/20 bg-background accent-accent"
+          />
+          Short answer
+        </label>
+      </div>
+
+      <div className="flex flex-col items-center gap-2">
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={isLoading}
+          className="
+            flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-accent px-5 py-2.5
+            text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95
+            disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none
+          "
+        >
+          {isLoading ? (
+            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+          ) : (
+            "Generate quiz"
+          )}
+        </button>
+        {error && (
+          <p role="alert" className="text-xs text-red-400">
+            {error}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── QuizRunner ────────────────────────────────────────────────────────────────
+// Runs one quiz: shows a single question at a time and tallies a score. Two
+// question types:
+//   - multiple choice → lock the options on click (correct in green, a wrong
+//     pick in red), score on selection.
+//   - short answer → a text box; on submit /api/grade asks Claude whether the
+//     answer means the same as the model answer, which drives correct/incorrect
+//     and reveals the model answer.
+// All quiz progress lives in this component's own state, so it resets cleanly
+// whenever the panel remounts.
+function QuizRunner({ questions }: { questions: QuizQuestion[] }) {
+  const [current, setCurrent] = useState(0); // index of the question on screen
+  const [score, setScore] = useState(0);
+  const [finished, setFinished] = useState(false);
+
+  // Multiple-choice state for the current question.
+  const [selected, setSelected] = useState<number | null>(null);
+  // Short-answer state for the current question.
+  const [saInput, setSaInput] = useState("");
+  const [saResult, setSaResult] = useState<boolean | null>(null);
+  const [isGrading, setIsGrading] = useState(false);
+  const [gradeError, setGradeError] = useState("");
+
+  // Auto-grow the answer box to fit its content. A fixed-`rows` textarea scrolls
+  // its first line up under the top padding once the answer overflows (the
+  // QuizFieldCheck bug); growing to `scrollHeight` keeps the whole answer visible.
+  // Runs on every `saInput` change, so it also resets the height when next()/
+  // restart() clear the field for the following question.
+  const saRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = saRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [saInput]);
+
+  const question = questions[current];
+  const isLast = current === questions.length - 1;
+  // Whether the current question is locked, regardless of type. Drives the
+  // Next/Results button.
+  const answered =
+    question.type === "short_answer" ? saResult !== null : selected !== null;
+
+  // MC: first click answers and locks the question. We score on selection (not
+  // at the end) so we don't have to keep every answer around.
+  function choose(i: number) {
+    if (question.type === "short_answer" || selected !== null) return;
+    setSelected(i);
+    if (i === question.correct) setScore((s) => s + 1);
+  }
+
+  // SA: send the answer to /api/grade for a YES/NO meaning check. This is a live
+  // call (no cache) and needs the key — same as chat. The verdict locks the
+  // question and reveals the model answer.
+  async function submitShortAnswer() {
+    if (question.type !== "short_answer" || isGrading || saResult !== null) return;
+    const answer = saInput.trim();
+    if (answer.length === 0) return;
+
+    const apiKey = localStorage.getItem("phi_anthropic_key");
+    if (!apiKey) {
+      setGradeError("Add your Anthropic API key in Account to check answers.");
+      return;
+    }
+
+    setGradeError("");
+    setIsGrading(true);
+    try {
+      const res = await fetch("/api/grade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey,
+          question: question.question,
+          sampleAnswer: question.sample_answer,
+          studentAnswer: answer,
+        }),
+      });
+      const data: { correct?: boolean; error?: string } = await res.json();
+      if (!res.ok) {
+        setGradeError(data.error || "Could not check your answer. Please try again.");
+        return;
+      }
+      const correct = !!data.correct;
+      setSaResult(correct);
+      if (correct) setScore((s) => s + 1);
+    } catch {
+      setGradeError("Network error. Check your connection and try again.");
+    } finally {
+      setIsGrading(false);
+    }
+  }
+
+  // Advance to the next question, or finish on the last one. Resets every
+  // per-question field so the next one starts clean.
+  function next() {
+    if (isLast) {
+      setFinished(true);
+      return;
+    }
+    setCurrent((c) => c + 1);
+    setSelected(null);
+    setSaInput("");
+    setSaResult(null);
+    setGradeError("");
+  }
+
+  function restart() {
+    setCurrent(0);
+    setScore(0);
+    setFinished(false);
+    setSelected(null);
+    setSaInput("");
+    setSaResult(null);
+    setGradeError("");
+  }
+
+  // ── Results screen ──
+  if (finished) {
+    return (
+      <div className="flex flex-col items-center gap-4 rounded-2xl border border-white/10 bg-surface p-8 text-center">
+        <p className="text-xs uppercase tracking-wide text-muted">Quiz complete</p>
+        <p className="text-4xl font-semibold text-accent">
+          {score} <span className="text-muted">/ {questions.length}</span>
+        </p>
+        <p className="text-sm text-muted">{quizResultMessage(score, questions.length)}</p>
+        <button
+          type="button"
+          onClick={restart}
+          className="mt-2 cursor-pointer rounded-xl border border-white/10 bg-surface px-5 py-2.5 text-sm font-medium text-text transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-white/25 hover:shadow-lg active:scale-95"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  // ── Question screen ──
+  return (
+    <div className="rounded-2xl border border-white/10 bg-surface p-6">
+      <p className="text-xs uppercase tracking-wide text-muted">
+        Question {current + 1} of {questions.length}
+      </p>
+      <h3 className="mt-2 text-lg font-medium text-text">{question.question}</h3>
+
+      {question.type === "short_answer" ? (
+        // ── Short-answer question ──
+        <>
+          <textarea
+            ref={saRef}
+            value={saInput}
+            onChange={(e) => setSaInput(e.target.value)}
+            disabled={saResult !== null || isGrading}
+            rows={3}
+            placeholder="Type your answer…"
+            aria-label="Your answer"
+            className="
+              mt-5 min-h-[4.75rem] w-full resize-none overflow-hidden rounded-xl border border-white/10 bg-background px-4 py-3
+              text-sm leading-relaxed text-text placeholder:text-muted
+              focus:border-accent/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60
+            "
+          />
+
+          {saResult === null ? (
+            <div className="mt-4 flex flex-col items-end gap-2">
+              <button
+                type="button"
+                onClick={submitShortAnswer}
+                disabled={isGrading || saInput.trim().length === 0}
+                className="
+                  flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-5 py-2.5
+                  text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95
+                  disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-accent disabled:hover:shadow-none
+                "
+              >
+                {isGrading ? (
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  "Check answer"
+                )}
+              </button>
+              {gradeError && (
+                <p role="alert" className="text-xs text-red-400">
+                  {gradeError}
+                </p>
+              )}
+            </div>
+          ) : (
+            // Graded: verdict banner (green/red) + the model answer to compare.
+            <>
+              <div
+                className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+                  saResult
+                    ? "border-green-500/60 bg-green-500/10 text-green-300"
+                    : "border-red-500/60 bg-red-500/10 text-red-300"
+                }`}
+              >
+                {saResult
+                  ? "Correct — that matches the model answer."
+                  : "Not quite — compare with the model answer below."}
+              </div>
+              <div className="mt-3 rounded-xl border border-white/10 bg-background/40 p-4">
+                <span className="text-xs uppercase tracking-wide text-accent">
+                  Model answer
+                </span>
+                <p className="mt-1 text-sm leading-relaxed text-text">
+                  {question.sample_answer}
+                </p>
+              </div>
+            </>
+          )}
+        </>
+      ) : (
+        // ── Multiple-choice question ──
+        <div className="mt-5 space-y-3">
+          {question.options.map((option, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => choose(i)}
+              disabled={answered}
+              className={quizOptionClass(i, question.correct, selected, answered)}
+            >
+              {/* A/B/C/D badge. `border-current` makes it inherit the option's
+                  state colour (green/red/muted) once answered. */}
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current text-xs">
+                {String.fromCharCode(65 + i)}
+              </span>
+              <span>{option}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* The Next/Results button only appears once they've answered. */}
+      {answered && (
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={next}
+            className="cursor-pointer rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-background transition-all duration-[250ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#e2bb68] hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
+          >
+            {isLast ? "See results" : "Next question"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Per-option styling. Before answering: neutral with a hover. After: the correct
+// option is always green, the student's wrong pick is red, and the rest dim out.
+// Green/red are a deliberate exception to the 3-colour palette — right/wrong is
+// universally colour-coded and the meaning would be lost in monochrome.
+function quizOptionClass(
+  i: number,
+  correct: number,
+  selected: number | null,
+  answered: boolean,
+): string {
+  const base =
+    "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors";
+  if (!answered) {
+    return `${base} cursor-pointer border-white/10 text-text hover:border-white/25`;
+  }
+  if (i === correct) {
+    return `${base} border-green-500/60 bg-green-500/10 text-green-300`;
+  }
+  if (i === selected) {
+    return `${base} border-red-500/60 bg-red-500/10 text-red-300`;
+  }
+  return `${base} border-white/5 text-muted`;
+}
+
+// A short line of feedback keyed to the score ratio.
+function quizResultMessage(score: number, total: number): string {
+  const ratio = total === 0 ? 0 : score / total;
+  if (ratio === 1) return "Perfect — you've got this down.";
+  if (ratio >= 0.6) return "Solid. A quick review and you're there.";
+  return "Worth another pass through the lesson.";
+}
