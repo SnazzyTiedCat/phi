@@ -13,3 +13,6 @@ build/
 # Secrets — anon key is embeddable, but keep config out of git as hygiene.
 # The service-role key must NEVER live in this repo. See Secrets.xcconfig.example.
 Config/Secrets.xcconfig
+
+# AI-1 adversarial run transcripts — generated locally, may echo model output.
+Phi/AI/Testing/transcripts/
