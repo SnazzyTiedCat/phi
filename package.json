@@ -1,0 +1,10 @@
+{
+  "name": "phi",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix Web run dev",
+    "build": "npm run build --prefix Web",
+    "start": "npm run start --prefix Web",
+    "lint": "npm run lint --prefix Web"
+  }
+}
