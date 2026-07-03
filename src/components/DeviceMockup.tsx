@@ -146,7 +146,7 @@ export default function DeviceMockup() {
           </div>
 
           {/* Carousel dots */}
-          <div className="absolute bottom-4 left-4 right-4 flex justify-center gap-1.5">
+          <div className="absolute bottom-1 left-4 right-4 flex justify-center gap-0.5">
             {SCREENS.map(({ id }) => (
               <button
                 key={id}
@@ -154,12 +154,17 @@ export default function DeviceMockup() {
                 aria-label={`Show ${SCREENS[id].label} screen`}
                 aria-current={current === id ? "true" : undefined}
                 onClick={() => showScreen(id)}
-                className={`h-1.5 rounded-full transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                  current === id
-                    ? "w-5 rounded-full bg-white"
-                    : "w-1.5 bg-c-700"
-                }`}
-              />
+                className="flex h-11 min-w-11 items-center justify-center rounded-full"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`block rounded-full transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                    current === id
+                      ? "h-1.5 w-5 bg-white"
+                      : "h-1.5 w-1.5 bg-c-700"
+                  }`}
+                />
+              </button>
             ))}
           </div>
         </div>
