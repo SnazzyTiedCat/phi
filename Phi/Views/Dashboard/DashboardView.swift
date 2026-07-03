@@ -45,9 +45,18 @@ struct DashboardView: View {
             ToolbarItem(placement: .topBarLeading) {
                 profileButton
             }
+            #if DEBUG
+            // TEMPORARY Chunk 3 verification trigger — remove with the harness.
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Verify") {
+                    Task { await SupabaseVerificationHarness.run() }
+                }
+                .tint(.white)
+            }
+            #endif
         }
         .sheet(isPresented: $showSettings) {
-            settingsPlaceholder
+            SettingsSheet()
         }
     }
 
@@ -56,7 +65,7 @@ struct DashboardView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Your Library")
-                .font(.phiH1) // Chunk 1's headline-level type token.
+                .phiFont(.h1) // Chunk 1's headline-level type token.
                 .foregroundStyle(.white)
 
             // Caption only when there's something to count.
@@ -67,7 +76,7 @@ struct DashboardView: View {
             if !store.materials.isEmpty {
                 let count = store.materials.count
                 Text("\(count) material\(count == 1 ? "" : "s")")
-                    .font(.phiBody)
+                    .phiFont(.body)
                     .foregroundStyle(Color.c400)
             }
         }
@@ -106,7 +115,7 @@ struct DashboardView: View {
             SpadeMark(size: 64, color: .c800)
 
             Text("No materials yet.")
-                .font(.phiBody)
+                .phiFont(.body)
                 .foregroundStyle(Color.c400)
         }
         // Fill the space below the header and center within it. Deliberately no
@@ -129,15 +138,6 @@ struct DashboardView: View {
         }
         // An SF Symbol isn't self-describing to VoiceOver; name what it does.
         .accessibilityLabel("Settings")
-    }
-
-    private var settingsPlaceholder: some View {
-        ZStack {
-            Color.c950.ignoresSafeArea()
-            Text("Settings — arrives in Chunk 6")
-                .font(.phiBody)
-                .foregroundStyle(Color.c400)
-        }
     }
 }
 

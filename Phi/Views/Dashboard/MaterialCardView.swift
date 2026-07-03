@@ -26,7 +26,7 @@ struct MaterialCardView: View {
                 // unpredictable in length, so this must clamp to two lines and
                 // tail-truncate rather than overflow the card.
                 Text(material.title)
-                    .font(.phiBody)
+                    .phiFont(.body)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)

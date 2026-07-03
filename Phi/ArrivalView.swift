@@ -38,13 +38,13 @@ struct ArrivalView: View {
                     .opacity(showMark ? 1 : 0)
 
                 Text("Phi")
-                    .font(.phiH1)
+                    .phiFont(.h1)
                     .foregroundStyle(.white)
                     .opacity(showName ? 1 : 0)
                     .offset(y: showName ? 0 : 8)
 
                 Text("AI that actually teaches you.")
-                    .font(.phiBody)
+                    .phiFont(.body)
                     .foregroundStyle(Color.c400)
                     .opacity(showTagline ? 1 : 0)
                     .offset(y: showTagline ? 0 : 8)
@@ -53,7 +53,7 @@ struct ArrivalView: View {
 
                 Button(action: handleContinue) {
                     Text("CONTINUE")
-                        .font(.phiLabel)
+                        .phiFont(.label)
                         .tracking(2) // approximates DESIGN.md's 0.08em letter-spacing
                         .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
