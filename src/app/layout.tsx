@@ -24,9 +24,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Phi — Your notes. Your tutor. Your mastery.",
+  title: "Phi — AI that actually teaches you",
   description:
-    "Upload your study material. Phi structures it into lessons, teaches it back to you, and doesn't stop until you've got it.",
+    "Native iOS tutor that turns your uploaded material into structured lessons, read-aloud teaching, and active recall. Join the TestFlight waitlist.",
 };
 
 export default function RootLayout({
@@ -49,10 +49,10 @@ export default function RootLayout({
         >
           {/* Primary — top-right, drifting on a 28s loop. */}
           <div
-            className="animate-orb-drift absolute -right-[20%] -top-[20%] h-[80vh] w-[80vh] rounded-full"
+            className="animate-orb-drift absolute -right-[20%] -top-[20%] h-[80vh] w-[80vh] rounded-full opacity-[0.22] blur-[80px]"
             style={{
               background:
-                "radial-gradient(circle, rgba(255,255,255,0.011) 0%, transparent 65%)",
+                "radial-gradient(circle, rgba(212,167,74,0.35) 0%, transparent 70%)",
             }}
           />
           {/* Secondary — bottom-left, static and even fainter. */}

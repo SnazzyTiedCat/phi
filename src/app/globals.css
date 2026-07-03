@@ -182,17 +182,8 @@
 }
 
 html {
-  /* Smooth in-page anchor scrolling for the hero's "See how it works" jump. */
+  /* Smooth in-page anchor scrolling for in-page nav links. */
   scroll-behavior: smooth;
-}
-
-/* Scroll-snapping is scoped to the marketing page only: the document scroller
-   snaps to section starts WHEN a `.snap-page` element is present (the landing
-   <main>). `:has()` keeps it off every authenticated route — those scroll
-   normally — without making <main> an inner scroll container (which would break
-   the viewport-rooted IntersectionObserver reveals). */
-html:has(.snap-page) {
-  scroll-snap-type: y mandatory;
 }
 
 html,
