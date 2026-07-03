@@ -25,6 +25,13 @@ struct RootView: View {
                     TutoringView(material: material)
                 }
         }
+        // Establish the anonymous cloud identity off the first-paint path.
+        // `.task` runs after the view appears (not in `PhiApp.init`), so the
+        // Dashboard renders immediately; identity resolves in the background.
+        // Chunk 4 is the first consumer of `IdentityStore.shared.currentUserID`.
+        .task {
+            await IdentityStore.shared.bootstrap()
+        }
     }
 }
 
