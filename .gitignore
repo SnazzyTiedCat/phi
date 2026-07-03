@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+
+# Swift Package Manager
+.swiftpm/
+
+# Secrets — anon key is embeddable, but keep config out of git as hygiene.
+# The service-role key must NEVER live in this repo. See Secrets.xcconfig.example.
+Config/Secrets.xcconfig
