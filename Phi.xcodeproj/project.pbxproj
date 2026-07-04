@@ -12,22 +12,11 @@
 
 /* Begin PBXFileReference section */
 		105BA50F2FF1A517004CF62A /* Phi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Phi.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		D1F0A1B2C3D4E5F600000005 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Secrets.xcconfig; sourceTree = SOURCE_ROOT; };
+		D1F0A1B2C3D4E5F600000005 /* Config/Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Secrets.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		105BA5112FF1A517004CF62A /* Phi */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				D1F0A1B2C3D4E5F600000001 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
-			);
-			path = Phi;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
-
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		D1F0A1B2C3D4E5F600000001 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		D1F0A1B2C3D4E5F600000001 /* Exceptions for "Phi" folder in "Phi" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -35,6 +24,17 @@
 			target = 105BA50E2FF1A517004CF62A /* Phi */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		105BA5112FF1A517004CF62A /* Phi */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D1F0A1B2C3D4E5F600000001 /* Exceptions for "Phi" folder in "Phi" target */,
+			);
+			path = Phi;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		105BA50C2FF1A517004CF62A /* Frameworks */ = {
@@ -53,6 +53,7 @@
 			children = (
 				105BA5112FF1A517004CF62A /* Phi */,
 				105BA5102FF1A517004CF62A /* Products */,
+				105EC0172FF75F6200B3A9C3 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -62,6 +63,14 @@
 				105BA50F2FF1A517004CF62A /* Phi.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		105EC0172FF75F6200B3A9C3 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				D1F0A1B2C3D4E5F600000005 /* Config/Secrets.xcconfig */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -114,13 +123,13 @@
 			);
 			mainGroup = 105BA5062FF1A517004CF62A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				D1F0A1B2C3D4E5F600000002 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 105BA5102FF1A517004CF62A /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			packageReferences = (
-				D1F0A1B2C3D4E5F600000002 /* XCRemoteSwiftPackageReference "supabase-swift" */,
-			);
 			targets = (
 				105BA50E2FF1A517004CF62A /* Phi */,
 			);
@@ -271,13 +280,13 @@
 		};
 		105BA51B2FF1A519004CF62A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = D1F0A1B2C3D4E5F600000005 /* Secrets.xcconfig */;
+			baseConfigurationReference = D1F0A1B2C3D4E5F600000005 /* Config/Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = YV8A5AFN97;
+				DEVELOPMENT_TEAM = 9GSM5SF73S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Phi/Info.plist;
@@ -286,7 +295,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.MichaelLargentJr.Phi;
+				PRODUCT_BUNDLE_IDENTIFIER = com.MichaelLargentJr.PhiIos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -300,13 +309,13 @@
 		};
 		105BA51C2FF1A519004CF62A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = D1F0A1B2C3D4E5F600000005 /* Secrets.xcconfig */;
+			baseConfigurationReference = D1F0A1B2C3D4E5F600000005 /* Config/Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = YV8A5AFN97;
+				DEVELOPMENT_TEAM = 9GSM5SF73S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Phi/Info.plist;
@@ -315,7 +324,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.MichaelLargentJr.Phi;
+				PRODUCT_BUNDLE_IDENTIFIER = com.MichaelLargentJr.PhiIos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

@@ -20,6 +20,17 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>SUPABASE_URL</key>
+	<string>$(SUPABASE_URL)</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>SpaceMono-Regular.ttf</string>
+		<string>SpaceMono-Bold.ttf</string>
+		<string>SpaceMono-Italic.ttf</string>
+		<string>SpaceMono-BoldItalic.ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -42,16 +53,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>UIAppFonts</key>
-	<array>
-		<string>SpaceMono-Regular.ttf</string>
-		<string>SpaceMono-Bold.ttf</string>
-		<string>SpaceMono-Italic.ttf</string>
-		<string>SpaceMono-BoldItalic.ttf</string>
-	</array>
-	<key>SUPABASE_URL</key>
-	<string>$(SUPABASE_URL)</string>
-	<key>SUPABASE_ANON_KEY</key>
-	<string>$(SUPABASE_ANON_KEY)</string>
 </dict>
 </plist>
