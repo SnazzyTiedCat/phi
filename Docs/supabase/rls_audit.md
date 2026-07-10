@@ -30,3 +30,16 @@ Unblock order: flip the two dashboard switches → apply
 `ios_materials_foundation.sql`, `ios_learning_chain.sql`,
 `ios_generated_content_cache.sql` → run `bash Docs/supabase/be4_verification.sh`
 → record results here → apply `legacy_public_wipe.sql` (gates in that file).
+
+-----COMPLETE-----
+PASS  identity A created a material
+PASS  lesson persisted
+PASS  cache hit: fresh-hash row returned (client makes zero generation calls)
+PASS  regenerate replaced in place — lesson id stable (chat history survives)
+PASS  no duplicate row after regenerate
+PASS  stale-hash cleanup statement accepted
+PASS  identity B cannot READ A's lesson (0 rows)
+PASS  identity B cannot WRITE as A (rejected: 42501)
+PASS  cleanup: material delete cascades
+
+July 9, 2026
