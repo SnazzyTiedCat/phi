@@ -1,5 +1,6 @@
 import Reveal from "@/components/Reveal";
 import DeviceMockup from "@/components/DeviceMockup";
+import FeatureCarousel from "@/components/FeatureCarousel";
 import ShowcaseNav from "@/components/ShowcaseNav";
 
 /**
@@ -34,24 +35,6 @@ const PHI_ROWS = [
   "Read-aloud teaching while you follow along",
   "Chat that explains, simplifies, or skips ahead",
   "Flashcards and quizzes from your exact content",
-];
-
-const FEATURES = [
-  {
-    n: "01",
-    title: "Upload",
-    body: "Drop in your PDF, notes, or slides. Phi structures the content into titled, navigable lessons.",
-  },
-  {
-    n: "02",
-    title: "Learn",
-    body: "Your tutor reads the lesson aloud while you read along. Pause anytime to ask for a simpler explanation.",
-  },
-  {
-    n: "03",
-    title: "Practice",
-    body: "Flashcards and quizzes generated from your exact material — active recall that locks it in.",
-  },
 ];
 
 export default function Home() {
@@ -118,29 +101,6 @@ export default function Home() {
               </div>
             </Reveal>
 
-            <Reveal hero from="up" delay={360}>
-              <div
-                aria-hidden="true"
-                className="mt-12 flex animate-breathe flex-col items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-c-600 md:items-start"
-              >
-                <span>Scroll</span>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M8 3v10M4 9l4 4 4-4"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-            </Reveal>
           </div>
 
           <Reveal hero from="up" delay={240}>
@@ -149,7 +109,10 @@ export default function Home() {
         </section>
 
         {/* ── Positioning ────────────────────────────────────────────────── */}
-        <section id="positioning" className="relative z-[1] py-[120px]">
+        <section
+          id="positioning"
+          className="relative z-[1] flex min-h-screen items-center py-[120px]"
+        >
           <div className="mx-auto w-full max-w-[1120px] px-6">
             <Reveal>
               <p className={SECTION_LABEL}>Why Phi exists</p>
@@ -212,9 +175,12 @@ export default function Home() {
         </section>
 
         {/* ── Features ───────────────────────────────────────────────────── */}
-        <section id="features" className="relative z-[1] py-[120px]">
+        <section
+          id="features"
+          className="relative z-[1] flex min-h-screen flex-col justify-center py-[120px]"
+        >
           <div className="mx-auto w-full max-w-[1120px] px-6">
-            <div className="max-w-[560px]">
+            <div className="mx-auto max-w-[560px] text-center">
               <Reveal>
                 <p className={SECTION_LABEL}>How it works</p>
                 <h2 className="mt-4 text-[clamp(24px,4vw,36px)] font-bold leading-[1.1] tracking-[-0.03em] text-white">
@@ -230,28 +196,17 @@ export default function Home() {
               </Reveal>
             </div>
 
-            <div className="mt-16 grid gap-5 md:grid-cols-3">
-              {FEATURES.map((feature, i) => (
-                <Reveal key={feature.n} from="up" delay={i * 150}>
-                  <article className={CARD}>
-                    <div className="mb-4 text-[11px] text-c-600">
-                      {feature.n}
-                    </div>
-                    <h3 className="text-[18px] font-bold text-white">
-                      {feature.title}
-                    </h3>
-                    <p className="mt-3 text-[13px] leading-[1.65] text-c-400">
-                      {feature.body}
-                    </p>
-                  </article>
-                </Reveal>
-              ))}
-            </div>
+            <Reveal delay={240} className="mt-16">
+              <FeatureCarousel />
+            </Reveal>
           </div>
         </section>
 
         {/* ── CTA ────────────────────────────────────────────────────────── */}
-        <section id="join" className="relative z-[1] py-[120px] pb-20">
+        <section
+          id="join"
+          className="relative z-[1] flex min-h-screen flex-col justify-center py-[120px] pb-20"
+        >
           <div className="mx-auto w-full max-w-[1120px] px-6 text-center">
             <Reveal>
               <div className="relative overflow-hidden rounded-[32px] p-16 glass-standard shadow-card md:px-8">
