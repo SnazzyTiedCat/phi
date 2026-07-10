@@ -16,3 +16,6 @@ Config/Secrets.xcconfig
 
 # AI-1 adversarial run transcripts — generated locally, may echo model output.
 Phi/AI/Testing/transcripts/
+
+# Claude Code local tool state
+.claude/
