@@ -187,4 +187,5 @@ struct SettingsSheet: View {
 
 #Preview {
     SettingsSheet()
+        .environment(MaterialStore.preview(materials: []))
 }

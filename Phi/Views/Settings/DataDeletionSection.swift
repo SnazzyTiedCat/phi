@@ -127,5 +127,6 @@ struct DataDeletionSection: View {
     }
     .scrollContentBackground(.hidden)
     .background(Color.phiBackground)
+    .environment(MaterialStore.preview(materials: []))
     .preferredColorScheme(.dark)
 }
