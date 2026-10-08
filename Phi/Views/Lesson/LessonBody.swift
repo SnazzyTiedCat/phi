@@ -42,8 +42,9 @@ enum LessonBody {
               start < end else {
             return rendered.display
         }
+        // A neutral tint, not gold: gold is reserved for the primary action.
         // VERIFY: backgroundColor as a dynamic member on an AttributedString slice (SwiftUI attribute scope).
-        result[start..<end].backgroundColor = Color.phiGold.opacity(0.25)
+        result[start..<end].backgroundColor = Color.phiTextPrimary.opacity(0.16)
         return result
     }
 
