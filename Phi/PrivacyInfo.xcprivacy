@@ -5,8 +5,8 @@
   Scope was set by grep of Phi/ on 2026-10-08:
   - Tracking: none. No analytics, ads, or attribution SDKs; the only package
     dependency is supabase-swift. No ATT or advertising-identifier APIs.
-  - Required-reason APIs: UserDefaults only (OnboardingStore, @AppStorage in
-    Typography.swift and SettingsSheet.swift). No file-timestamp, disk-space,
+  - Required-reason APIs: UserDefaults only (@AppStorage in Typography.swift and
+    SettingsSheet.swift; ConsentStore in Stores/). No file-timestamp, disk-space,
     system-boot-time, or active-keyboard API calls were found.
   Keep this file in sync with PRIVACY.md and Docs/appstore/METADATA.md.
 -->

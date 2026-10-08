@@ -14,7 +14,7 @@ enum PhiFont: String, CaseIterable, Identifiable {
 
     /// The single UserDefaults key every font-aware view reads/writes. Declared
     /// once here so a typo can't silently fork it into two keys (same reasoning
-    /// as `OnboardingStore` centralizing its flag string).
+    /// as `ConsentStore` centralizing its flag key).
     static let storageKey = "phi.fontChoice"
 }
 
