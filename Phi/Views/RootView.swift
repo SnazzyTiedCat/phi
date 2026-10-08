@@ -3,16 +3,8 @@ import SwiftUI
 /// The app's launch destination: the Dashboard, wrapped in the navigation
 /// spine every other screen attaches to.
 ///
-/// CHUNK 2 CHANGE: the previous onboarding branch (Arrival vs. main app, gated
-/// on `OnboardingStore.hasCompletedOnboarding`) is intentionally gone — the app
-/// now always opens straight to the Dashboard.
-///
-/// `ArrivalView` and `OnboardingStore` are deliberately left in the project,
-/// merely unreferenced from routing. Per the Orchestrator's decision log, Chunk
-/// 3 repurposes their "shown once, persisted" mechanism for the Welcome Sheet;
-/// whether it reuses, adapts, or discards pieces is Chunk 3's call, not this
-/// one's. Leaving both files in place keeps that door open instead of forcing a
-/// rebuild.
+/// The app opens straight to the library (the Dashboard), with no gate in
+/// front of it.
 ///
 /// This lives here rather than in `PhiApp` because an `App` struct exists to
 /// declare *what scenes exist*, not to host the navigation container — keeping

@@ -45,15 +45,6 @@ struct DashboardView: View {
             ToolbarItem(placement: .topBarLeading) {
                 profileButton
             }
-            #if DEBUG
-            // TEMPORARY Chunk 3 verification trigger — remove with the harness.
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Verify") {
-                    Task { await SupabaseVerificationHarness.run() }
-                }
-                .tint(.white)
-            }
-            #endif
         }
         .sheet(isPresented: $showSettings) {
             SettingsSheet()
