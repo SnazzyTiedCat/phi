@@ -1,15 +1,17 @@
 import SwiftUI
 
-/// The app's launch destination: the Dashboard, wrapped in the navigation
-/// spine every other screen attaches to.
+/// The app's launch destination: the library, wrapped in the navigation stack
+/// every other screen attaches to.
 ///
-/// The app opens straight to the library (the Dashboard), with no gate in
-/// front of it.
+/// The library store lives here and is injected into the environment, so the
+/// Dashboard, the reader, and later screens all read the same instance.
 ///
 /// This lives here rather than in `PhiApp` because an `App` struct exists to
-/// declare *what scenes exist*, not to host the navigation container — keeping
-/// it in an ordinary View keeps the whole thing previewable in isolation.
+/// declare what scenes exist, not to host the navigation container. Keeping it
+/// in an ordinary View keeps the whole thing previewable in isolation.
 struct RootView: View {
+    @State private var materials = MaterialStore()
+
     var body: some View {
         NavigationStack {
             DashboardView()
@@ -17,10 +19,9 @@ struct RootView: View {
                     TutoringView(material: material)
                 }
         }
+        .environment(materials)
         // Establish the anonymous cloud identity off the first-paint path.
-        // `.task` runs after the view appears (not in `PhiApp.init`), so the
-        // Dashboard renders immediately; identity resolves in the background.
-        // Chunk 4 is the first consumer of `IdentityStore.shared.currentUserID`.
+        // The Dashboard loads the library once this resolves.
         .task {
             await IdentityStore.shared.bootstrap()
         }

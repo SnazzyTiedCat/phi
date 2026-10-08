@@ -8,6 +8,7 @@ import Supabase
 /// persists the session in the Keychain automatically, so once bootstrapped an
 /// identity survives relaunches and reinstalls-until-wipe without any custom
 /// session cache of our own.
+@MainActor
 @Observable
 final class IdentityStore {
     static let shared = IdentityStore()

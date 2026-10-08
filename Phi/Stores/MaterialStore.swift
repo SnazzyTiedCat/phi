@@ -178,3 +178,15 @@ enum MaterialStoreError: LocalizedError {
         }
     }
 }
+
+#if DEBUG
+extension MaterialStore {
+    /// Seeds a store for previews. `materials` is `private(set)`, so the seed is
+    /// written here, inside the file that declares it.
+    static func preview(materials: [Material]) -> MaterialStore {
+        let store = MaterialStore()
+        store.materials = materials
+        return store
+    }
+}
+#endif
