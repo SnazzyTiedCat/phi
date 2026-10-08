@@ -9,9 +9,8 @@ struct RecallView: View {
     let section: LessonSection
     let userID: UUID
 
-    // VERIFY: nothing injects MaterialStore yet. PhiApp and RootView do not, and
-    // DashboardView makes its own. The reader must add .environment(...) above
-    // this sheet, or the first load traps.
+    // RootView injects the one shared MaterialStore on the navigation stack. This
+    // sheet inherits it, so no extra injection is needed here.
     @Environment(MaterialStore.self) private var materials
 
     @State private var mode: RecallMode = .cards
