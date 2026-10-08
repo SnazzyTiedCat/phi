@@ -13,6 +13,11 @@ struct DataDeletionSection: View {
     @State private var showConfirmation = false
     @State private var state: DeletionState = .idle
 
+    // Explicit, because private @State would make the memberwise init private.
+    init(onDeleted: @escaping () -> Void) {
+        self.onDeleted = onDeleted
+    }
+
     var body: some View {
         Section("Your data") {
             if case .running = state {
