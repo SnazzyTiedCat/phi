@@ -13,7 +13,7 @@ struct LegalSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Space Mono — SIL Open Font License 1.1")
+                    Text("Space Mono: SIL Open Font License 1.1")
                         .phiFont(.body)
                         .foregroundStyle(.white)
 

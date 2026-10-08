@@ -1,14 +1,14 @@
-> **DRAFT — must be reviewed by a qualified attorney before publishing.**
+> **DRAFT: must be reviewed by a qualified attorney before publishing.**
 
 # Phi Support
 
 **Contact:** michaellargentjr@gmail.com
 **Operator:** Michael Largent Jr, an individual developer. [ADDRESS]
-**Response time:** [RESPONSE TIME — set by operator]
+**Response time:** [RESPONSE TIME: set by operator]
 
 Phi is a small, independent app. Email is the support channel. Please include the details below so we can help faster.
 
-Related pages: [Privacy Policy — TO-BE-HOSTED] · [Terms of Use — TO-BE-HOSTED]
+Related pages: [Privacy Policy: TO-BE-HOSTED] · [Terms of Use: TO-BE-HOSTED]
 
 ## Common questions
 
@@ -45,13 +45,13 @@ Phi stores your study materials and the content generated from them in our Supab
 
 1. **In the app (planned).** An in-app "Delete my data" control is planned. It is not available yet. When it ships, open Settings and choose "Delete my data," then confirm. [UNCERTAIN] The location of the control is not final.
 
-2. **By email (available now).** Email michaellargentjr@gmail.com with the subject line "Data deletion request." Include the app version and the device model. If you can find your anonymous account ID, include it. [UNCERTAIN] The app does not currently show this ID, so we may need to agree another way to confirm which account is yours. We will confirm when your data has been deleted. [RESPONSE TIME — set by operator]
+2. **By email (available now).** Email michaellargentjr@gmail.com with the subject line "Data deletion request." Include the app version and the device model. If you can find your anonymous account ID, include it. [UNCERTAIN] The app does not currently show this ID, so we may need to agree another way to confirm which account is yours. We will confirm when your data has been deleted. [RESPONSE TIME: set by operator]
 
 3. **Revoke your Anthropic key.** In your Anthropic account, revoke the API key that you gave to Phi. This stops that key from being used anywhere, including in Phi. It does not depend on the app.
 
 4. **Delete the app.** Deleting Phi removes the app from your device. [UNCERTAIN] Some items in the iOS Keychain may remain after the app is deleted. Complete step 1 or step 2 before deleting the app, so that your server-side data is removed.
 
-Deleting your data may take [TIMEFRAME — set by operator] to complete, and copies may remain in backups for a limited period. See the Privacy Policy, Section 5.
+Deleting your data may take [TIMEFRAME: set by operator] to complete, and copies may remain in backups for a limited period. See the Privacy Policy, Section 5.
 
 ## Children and parents
 

@@ -1,4 +1,4 @@
-> **DRAFT — must be reviewed by a qualified attorney before publishing.**
+> **DRAFT: must be reviewed by a qualified attorney before publishing.**
 
 # Phi Privacy Policy
 

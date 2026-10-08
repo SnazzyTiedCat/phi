@@ -20,6 +20,14 @@ final class IdentityStore {
 
     private init() {}
 
+    /// Drops the current identity and mints a new anonymous one. Used after the
+    /// student deletes their data, because the old account no longer exists.
+    /// Callers must have signed out first, so bootstrap does not reuse the session.
+    func restartIdentity() async {
+        currentUserID = nil
+        await bootstrap()
+    }
+
     /// Establishes identity without blocking first paint. Call it from a `.task`
     /// on `RootView`, not from `PhiApp.init`. Until it resolves, material loads
     /// report that Phi is still connecting.

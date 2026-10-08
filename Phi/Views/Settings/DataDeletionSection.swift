@@ -88,6 +88,8 @@ struct DataDeletionSection: View {
             } catch {
                 keyRemovalFailed = true
             }
+            // The old account is gone, so start a new anonymous one right away.
+            await IdentityStore.shared.restartIdentity()
             state = .deleted(keyRemovalFailed: keyRemovalFailed)
             onDeleted()
         }
@@ -104,7 +106,7 @@ struct DataDeletionSection: View {
         if keyRemovalFailed {
             return "Your data was deleted, but the saved API key could not be removed from the Keychain. Remove it from the Anthropic API key section."
         }
-        return "Your data was deleted, and the saved API key was removed from this device. The next time you open Phi, it will set up a new anonymous account."
+        return "Your data was deleted, and the saved API key was removed from this device. Phi has set up a new anonymous account for you."
     }
 
     private static let stillConnectingMessage = "Phi is still connecting. Try again in a moment."

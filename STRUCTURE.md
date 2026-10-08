@@ -25,11 +25,11 @@ Phi/                    ← the iOS app target (filesystem-synchronized: folders
     Tutor/              ←   the chat seam (streamed tutor replies)
     Recall/             ←   flashcard/quiz generation shapes, prompts, and the generator seam
     Previews/           ←   DEBUG-only sample data and mocks for previews
-    Testing/            ←   adversarial/verification test docs for the above
   DesignSystem/         ← brand primitives every screen uses: colors, type, metrics, motion, surfaces, buttons, haptics
+  Resources/Legal/      ← bundled privacy, terms, and support copies (keep identical to Docs/legal/)
 
 Web/                    ← the marketing/web app — untouchable from iOS work
-Docs/                   ← cross-cutting docs: Supabase contracts and SQL, legal drafts, App Store metadata, design spec
+Docs/                   ← cross-cutting docs: Supabase contracts and SQL, legal drafts, App Store metadata, design spec, AI test plans (ai-testing/)
 Tools/                  ← dev-only scripts, not compiled into the app (recall-prompt.swift)
 Config/                 ← Secrets.xcconfig (gitignored; see .example)
 DESIGN.md               ← the web-era design token spec (see Docs/DESIGN-IOS.md for the iOS decisions)

@@ -54,7 +54,7 @@ private struct QuizQuestionCard: View {
                 explanation: question.explanation
             )
         case .shortAnswer:
-            // Short-answer rows always carry a sample answer. The empty fallback only covers a malformed row.
+            // sample_answer is optional in the shape. The empty fallback only covers a row without one.
             ShortAnswerBody(
                 prompt: question.question,
                 sampleAnswer: question.sampleAnswer ?? "",
@@ -75,6 +75,12 @@ private struct MultipleChoiceBody: View {
 
     /// Nil until the student answers. The first tap locks the question.
     @State private var selected: Int?
+
+    init(options: [String], correct: Int?, explanation: String) {
+        self.options = options
+        self.correct = correct
+        self.explanation = explanation
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: PhiSpacing.sm) {
@@ -176,6 +182,13 @@ private struct ShortAnswerBody: View {
     @State private var grade: ShortAnswerGrade?
     @State private var gradeError: String?
     @State private var isChecking = false
+
+    init(prompt: String, sampleAnswer: String, explanation: String, store: RecallStore) {
+        self.prompt = prompt
+        self.sampleAnswer = sampleAnswer
+        self.explanation = explanation
+        self.store = store
+    }
 
     private var attempt: String {
         answer.trimmingCharacters(in: .whitespacesAndNewlines)

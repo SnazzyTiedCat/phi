@@ -21,6 +21,12 @@ struct RecallView: View {
     /// The error for the mode on screen. Cleared when that mode loads again.
     @State private var loadError: String?
 
+    // Explicit, because private state makes the synthesized memberwise init private.
+    init(section: LessonSection, userID: UUID) {
+        self.section = section
+        self.userID = userID
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: PhiSpacing.lg) {
             Text(section.title)

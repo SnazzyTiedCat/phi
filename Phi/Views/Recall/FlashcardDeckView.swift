@@ -13,6 +13,11 @@ struct FlashcardDeckView: View {
     @State private var gotItCount = 0
     @State private var isFinished = false
 
+    // Explicit, because private state makes the synthesized memberwise init private.
+    init(cards: [Flashcard]) {
+        self.cards = cards
+    }
+
     private var current: Flashcard {
         cards[index]
     }

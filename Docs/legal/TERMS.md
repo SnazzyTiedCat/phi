@@ -1,4 +1,4 @@
-> **DRAFT — must be reviewed by a qualified attorney before publishing.**
+> **DRAFT: must be reviewed by a qualified attorney before publishing.**
 
 # Phi Terms of Use
 
@@ -10,7 +10,7 @@ These terms govern your use of the Phi app for iPhone and iPad (version 1.0 and 
 
 ## 1. Who can use Phi
 
-You must be at least [MINIMUM AGE — UNCERTAIN] years old to use Phi. You must not use Phi if you are under 13. [UNCERTAIN] Phi is aimed at high-school and college students. The minimum age, whether users aged 13 to 17 need a parent's or guardian's permission, and whether school-provided use changes any of this are open questions for counsel.
+You must be at least [MINIMUM AGE: UNCERTAIN] years old to use Phi. You must not use Phi if you are under 13. [UNCERTAIN] Phi is aimed at high-school and college students. The minimum age, whether users aged 13 to 17 need a parent's or guardian's permission, and whether school-provided use changes any of this are open questions for counsel.
 
 You are responsible for following your school's rules on the use of AI tools.
 
@@ -100,7 +100,7 @@ To the maximum extent permitted by law, Phi is provided "as is" and "as availabl
 
 To the maximum extent permitted by law, we are not liable for any indirect, incidental, special, consequential, exemplary, or punitive damages, or for loss of data, grades, or profits, arising from or related to Phi.
 
-Our total liability for all claims relating to Phi is limited to [LIABILITY CAP — UNCERTAIN: amount to be set by counsel, for example the amount you paid for Phi, which is zero if it is free].
+Our total liability for all claims relating to Phi is limited to [LIABILITY CAP: UNCERTAIN: amount to be set by counsel, for example the amount you paid for Phi, which is zero if it is free].
 
 [UNCERTAIN] Limitations of liability may be unenforceable for personal injury, for certain consumer claims, or against people who lack legal capacity to contract, which can include minors. Counsel must review this section.
 
@@ -127,7 +127,7 @@ We may update these terms. When we do, we will post the new terms with a new eff
 
 ## 17. Governing law and disputes
 
-These terms are governed by the laws of [GOVERNING LAW — UNCERTAIN: jurisdiction to be chosen by the operator with counsel]. Any dispute will be resolved in [VENUE — UNCERTAIN]. Nothing in this section limits any consumer rights you have where you live.
+These terms are governed by the laws of [GOVERNING LAW: UNCERTAIN: jurisdiction to be chosen by the operator with counsel]. Any dispute will be resolved in [VENUE: UNCERTAIN]. Nothing in this section limits any consumer rights you have where you live.
 
 [UNCERTAIN] The choice of governing law and venue is an open issue. It depends on where the operator is located and on the consumer-protection rules that apply to the users.
 

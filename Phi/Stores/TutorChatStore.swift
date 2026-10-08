@@ -82,10 +82,12 @@ final class TutorChatStore {
             return
         }
 
-        // 3. Save the full reply. An empty reply is not saved.
+        // 3. Save the full reply. An empty reply is not saved. The streamed text
+        //    stays on screen until the saved row is in `messages`, so the bubble
+        //    never drops out during the save.
         let reply = streamingText
-        streamingText = ""
         guard !reply.isEmpty else {
+            streamingText = ""
             errorMessage = AnthropicError.emptyResponse.errorDescription
             return
         }
@@ -97,7 +99,9 @@ final class TutorChatStore {
                 content: reply
             ))
             messages.append(saved)
+            streamingText = ""
         } catch {
+            streamingText = ""
             errorMessage = Self.message(for: error, fallback: "Phi couldn't save the tutor's reply. Send your message again.")
         }
     }

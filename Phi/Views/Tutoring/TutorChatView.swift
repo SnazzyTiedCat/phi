@@ -71,8 +71,11 @@ struct TutorChatView: View {
             // nothing was saved, so the text stays in the field for Retry.
             if store.messages.count == countBefore {
                 failedText = raw
-                sentText = nil
+            } else if draft == raw {
+                // Saved. Clear here too, in case the change above has not been observed yet.
+                draft = ""
             }
+            sentText = nil
             isSubmitting = false
         }
     }
