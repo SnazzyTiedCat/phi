@@ -1,8 +1,8 @@
 import Foundation
 import Supabase
 
-/// Owns the app's invisible cloud identity — mirroring the `OnboardingStore` /
-/// `MaterialStore` `@Observable` single-store convention from Chunks 1–2.
+/// Owns the app's invisible cloud identity. Like the other stores, it is one
+/// `@Observable` object that owns one slice of app state.
 ///
 /// The identity is anonymous: no form, no login screen. The Supabase SDK
 /// persists the session in the Keychain automatically, so once bootstrapped an
@@ -12,16 +12,16 @@ import Supabase
 final class IdentityStore {
     static let shared = IdentityStore()
 
-    /// `nil` until `bootstrap()` resolves an identity. Chunk 4 gates upload on
-    /// this, so a nil here (e.g. anonymous sign-ins disabled) fails loudly
-    /// rather than letting an un-scoped write through.
+    /// `nil` until `bootstrap()` resolves an identity. Material loads and imports
+    /// check this first, so a nil here (e.g. anonymous sign-ins disabled) fails
+    /// loudly rather than letting an un-scoped write through.
     var currentUserID: UUID?
 
     private init() {}
 
-    /// Establishes identity without blocking first paint — call from a `.task`
-    /// on `RootView`, not from `PhiApp.init`. The Dashboard doesn't need
-    /// identity this chunk; Chunk 4 will.
+    /// Establishes identity without blocking first paint. Call it from a `.task`
+    /// on `RootView`, not from `PhiApp.init`. Until it resolves, material loads
+    /// report that Phi is still connecting.
     func bootstrap() async {
         // 1. Existing persisted session? The SDK restores it from the Keychain
         //    on init — we just read it, no custom session cache.
