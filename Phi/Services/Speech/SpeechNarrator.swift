@@ -102,10 +102,12 @@ final class SpeechNarrator: NSObject {
 
     /// Runs when the synthesizer goes quiet. A callback from an utterance that
     /// `stop()` or `play()` already replaced finds the synthesizer busy and does nothing.
-    private func speechEnded() {
+    /// Only `naturalFinish` advances the lesson. A cancel, from `stop()` or from the
+    /// system (for example an audio interruption), clears state and stops there.
+    private func speechEnded(naturalFinish: Bool) {
         guard !synthesizer.isSpeaking else { return }
-        // stop() clears isSpeaking before its cancel callback arrives, so only a natural finish sees it set.
-        let finished = isSpeaking
+        // stop() clears isSpeaking before its cancel callback arrives, so the flag is already false there.
+        let finished = naturalFinish && isSpeaking
         clearState()
         if finished { onFinish?() }
     }
@@ -148,13 +150,13 @@ extension SpeechNarrator: AVSpeechSynthesizerDelegate {
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
-            self?.speechEnded()
+            self?.speechEnded(naturalFinish: true)
         }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
-            self?.speechEnded()
+            self?.speechEnded(naturalFinish: false)
         }
     }
 }

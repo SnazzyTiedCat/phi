@@ -99,7 +99,7 @@ struct NarrationBar: View {
                 }
             }
         } label: {
-            Text("Speed " + speedText(reader.speed))
+            Text(speedText(reader.speed))
                 .phiFont(.body)
                 .foregroundStyle(Color.phiTextPrimary)
                 .frame(minWidth: 44, minHeight: 44)
@@ -131,8 +131,14 @@ struct NarrationBar: View {
         .accessibilityLabel("Practice this section")
     }
 
+    /// The rates are AVSpeech values, where 0.5 is the normal speed, not half speed.
+    /// Show names, so nobody reads the default as a slowdown.
     private func speedText(_ value: Float) -> String {
-        String(format: "%.1f", value)
+        switch value {
+        case ..<0.45: return "Slower"
+        case ..<0.55: return "Normal"
+        default: return "Faster"
+        }
     }
 }
 

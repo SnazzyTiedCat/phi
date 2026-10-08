@@ -23,6 +23,13 @@ final class MaterialStore {
         self.storage = storage
     }
 
+    /// Empties the list on this device. Used after the account's data is deleted,
+    /// so no deleted material stays on screen.
+    func forgetAll() {
+        materials = []
+        errorMessage = nil
+    }
+
     /// Loads the person's materials, newest first. Needs a resolved identity.
     func load() async {
         errorMessage = nil

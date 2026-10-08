@@ -40,7 +40,8 @@ final class LessonReader {
         rows.indices.contains(focusIndex) ? rows[focusIndex] : nil
     }
 
-    var isReading: Bool { narrator.isSpeaking }
+    /// True only while audio is playing. A paused utterance still reports isSpeaking.
+    var isReading: Bool { narrator.isSpeaking && !narrator.isPaused }
     var isPaused: Bool { narrator.isPaused }
     var isPlaying: Bool { narrator.isSpeaking && !narrator.isPaused }
 

@@ -49,7 +49,8 @@ struct TutorChatView: View {
     // MARK: Sending
 
     private var canSend: Bool {
-        !isSubmitting && !store.isReplying && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        // Sending before the history loads would let the load overwrite the new bubble.
+        hasLoaded && !isSubmitting && !store.isReplying && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var canRetry: Bool {

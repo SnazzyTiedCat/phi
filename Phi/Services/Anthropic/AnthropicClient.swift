@@ -24,6 +24,8 @@ enum AnthropicError: LocalizedError {
     /// The reply hit `max_tokens` before it finished. Retrying with the same budget won't help.
     case truncated
     case transport(Error)
+    /// The Keychain could not be read. This is not the same as "no key saved".
+    case keyUnavailable(Error)
 
     var errorDescription: String? {
         switch self {
@@ -45,6 +47,8 @@ enum AnthropicError: LocalizedError {
             return "The reply was too long and got cut off. Try a smaller section or a shorter question."
         case .transport:
             return "Phi could not reach Anthropic. Check your connection and try again."
+        case .keyUnavailable:
+            return "Phi could not read your saved API key from the Keychain. Re-enter it in Settings."
         }
     }
 }
@@ -135,8 +139,15 @@ struct AnthropicClient: Sendable {
 
     /// Reads the key fresh each time. A missing or blank key fails before any network call.
     private func resolvedKey() throws -> String {
-        guard let raw = try? keyProvider() else {
-            throw AnthropicError.missingAPIKey
+        // Only a missing key means "add a key". Any other failure is reported as such,
+        // so a readable saved key is never mistaken for a missing one.
+        let raw: String
+        do {
+            raw = try keyProvider()
+        } catch let error as AnthropicError {
+            throw error
+        } catch {
+            throw AnthropicError.keyUnavailable(error)
         }
         let key = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {

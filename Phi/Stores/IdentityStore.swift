@@ -34,8 +34,10 @@ final class IdentityStore {
     func bootstrap() async {
         // 1. Existing persisted session? The SDK restores it from the Keychain
         //    on init — we just read it, no custom session cache.
-        if let userID = supabase.auth.currentSession?.user.id {
-            currentUserID = userID
+        // `currentSession` is read with `await` because the SDK can make it async. The
+        // await is harmless if it is not.
+        if let session = await supabase.auth.currentSession {
+            currentUserID = session.user.id
             return
         }
 

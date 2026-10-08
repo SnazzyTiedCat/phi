@@ -12,6 +12,7 @@ struct DataDeletionSection: View {
 
     @State private var showConfirmation = false
     @State private var state: DeletionState = .idle
+    @Environment(MaterialStore.self) private var materials
 
     // Explicit, because private @State would make the memberwise init private.
     init(onDeleted: @escaping () -> Void) {
@@ -88,7 +89,8 @@ struct DataDeletionSection: View {
             } catch {
                 keyRemovalFailed = true
             }
-            // The old account is gone, so start a new anonymous one right away.
+            // The old account is gone, so clear what it showed and start a new anonymous one.
+            materials.forgetAll()
             await IdentityStore.shared.restartIdentity()
             state = .deleted(keyRemovalFailed: keyRemovalFailed)
             onDeleted()
@@ -106,7 +108,7 @@ struct DataDeletionSection: View {
         if keyRemovalFailed {
             return "Your data was deleted, but the saved API key could not be removed from the Keychain. Remove it from the Anthropic API key section."
         }
-        return "Your data was deleted, and the saved API key was removed from this device. Phi has set up a new anonymous account for you."
+        return "Your data was deleted, and the saved API key was removed from this device. Phi will set up a new anonymous account as soon as it can connect."
     }
 
     private static let stillConnectingMessage = "Phi is still connecting. Try again in a moment."
