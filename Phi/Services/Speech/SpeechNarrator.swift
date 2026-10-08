@@ -19,6 +19,8 @@ final class SpeechNarrator: NSObject {
     /// when a `play()` starts. Changes apply from the next utterance. Slower than
     /// the default is allowed on purpose: re-hearing a dense passage is a core study move.
     var rate: Float = AVSpeechUtteranceDefaultSpeechRate
+    /// Runs when speech ends on its own. `stop()` and `load(text:)` do not call it.
+    @ObservationIgnored var onFinish: (() -> Void)?
 
     @ObservationIgnored private let synthesizer = AVSpeechSynthesizer()
     @ObservationIgnored private var text = ""
@@ -102,7 +104,10 @@ final class SpeechNarrator: NSObject {
     /// `stop()` or `play()` already replaced finds the synthesizer busy and does nothing.
     private func speechEnded() {
         guard !synthesizer.isSpeaking else { return }
+        // stop() clears isSpeaking before its cancel callback arrives, so only a natural finish sees it set.
+        let finished = isSpeaking
         clearState()
+        if finished { onFinish?() }
     }
 
     private func highlight(_ range: NSRange) {
