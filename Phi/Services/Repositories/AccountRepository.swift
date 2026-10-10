@@ -5,21 +5,22 @@ import Supabase
 struct AccountRepository {
     /// Deletes the signed-in account and everything it owns.
     ///
-    /// The order matters. Storage goes first. Deleting the auth user cascades to
-    /// the ios rows, but not to the files, which have no foreign key. Once the
-    /// user is gone, the storage policy can no longer match `auth.uid()`, so the
-    /// files could never be removed afterward. If the RPC fails after storage is
-    /// cleared, the account survives with no files, and a retry finishes the job.
+    /// The order matters. The server-side account deletion must succeed before
+    /// storage is touched. Otherwise a missing or failing RPC can leave the
+    /// account alive with material rows pointing at files that are already gone.
     func deleteAccount(userID: UUID) async throws {
-        // 1. Files, while the session still passes the storage policy.
-        try await MaterialStorage().removeAll(under: userID.uuidString.lowercased())
-
-        // 2. Auth user. The FK cascade removes every ios.* row. The function is
+        // 1. Auth user. The FK cascade removes every ios.* row. The function is
         //    in ios_account_deletion.sql, which is not applied automatically.
         // VERIFY: rpc("delete_my_account") with no params, via schema("ios").
         try await supabase.schema("ios")
             .rpc("delete_my_account")
             .execute()
+
+        // 2. Files. The local access token is still present until sign-out below,
+        //    so the storage policy can authorize immediate cleanup. If this
+        //    fails, a retry never leaves live material rows pointing at missing
+        //    files, because the account deletion already cascaded those rows.
+        try await MaterialStorage().removeAll(under: userID.uuidString.lowercased())
 
         // 3. Local session. Scope `.local`: the server session is already gone,
         //    so a global sign-out would call the server with a dead token.
