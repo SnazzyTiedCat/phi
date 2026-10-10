@@ -5,7 +5,9 @@
 --
 -- Deleting the auth user cascades to every ios.* row: each ios table's user_id
 -- references auth.users(id) on delete cascade. Storage objects have no foreign
--- key, so the app removes its files (MaterialStorage.removeAll) before calling this.
+-- key, so after this succeeds the app removes its files with the still-local
+-- access token before signing out. Keep this order so a missing or failing RPC
+-- never leaves a live account with material rows pointing at deleted files.
 --
 -- Lives in `ios`, not `public`, matching the rest of the iOS schema.
 -- Idempotent: safe to re-run.
