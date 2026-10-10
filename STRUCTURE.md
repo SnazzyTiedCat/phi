@@ -6,22 +6,33 @@
 Phi/                    ← the iOS app target (filesystem-synchronized: folders ON DISK are the Xcode groups)
   PhiApp.swift          ← app entry point — the only Swift file allowed at this level
   Info.plist            ← pinned here by a pbxproj build exception; do not move
-  Views/                ← SwiftUI views, grouped by screen/topic (Dashboard/, Settings/, Tutoring/, Onboarding/)
-  Stores/               ← observable app state (@Observable objects that own truth: identity, materials, onboarding flag)
-  Models/               ← plain data types with no behavior beyond themselves
-  Services/             ← talking to the outside world (Supabase client + its verification harness)
-  AI/                   ← the tutoring brain: prompt logic, no UI
+  PrivacyInfo.xcprivacy ← Apple privacy manifest (required-reason APIs, data types)
+  Views/                ← SwiftUI views, grouped by screen/topic (Dashboard/, Settings/, Tutoring/, Recall/, Lesson/)
+  Stores/               ← observable app state (@Observable objects that own truth: identity, materials, lessons,
+                          tutor chat, recall, consent)
+  Models/               ← plain data types with no behavior beyond themselves (Material, Lesson, ChatMessage, ContentHash)
+  Services/             ← talking to the outside world
+    Repositories/       ←   Supabase table and Storage access (one file per table)
+    Anthropic/          ←   the Messages API client, its configuration, and the lesson/tutor/recall implementations
+    Speech/             ←   on-device read-aloud with word tracking
+    KeychainStore.swift ←   secure storage for the user's API key
+    MaterialExtraction.swift ← turns a picked file into plain text
+    SupabaseClient.swift     ← the one configured Supabase client
+  AI/                   ← the tutoring brain: prompt logic and response shapes, no networking
     Personas/           ←   who the AI is (system-prompt personalities)
     Prompting/          ←   how prompts are assembled + guardrails
-    Recall/             ←   flashcard/quiz generation shapes and prompts
-    Testing/            ←   adversarial/verification test docs for the above
-  DesignSystem/         ← brand primitives every screen uses: Colors, Typography, SpadeMark (♠)
+    Lessons/            ←   lesson prompts, JSON parser, and the generator seam
+    Tutor/              ←   the chat seam (streamed tutor replies)
+    Recall/             ←   flashcard/quiz generation shapes, prompts, and the generator seam
+    Previews/           ←   DEBUG-only sample data and mocks for previews
+  DesignSystem/         ← brand primitives every screen uses: colors, type, metrics, motion, surfaces, buttons, haptics
+  Resources/Legal/      ← bundled privacy, terms, and support copies (keep identical to Docs/legal/)
 
 Web/                    ← the marketing/web app — untouchable from iOS work
-Docs/                   ← cross-cutting docs (Supabase contracts, RLS audit, recall shapes)
+Docs/                   ← cross-cutting docs: Supabase contracts and SQL, legal drafts, App Store metadata, design spec, AI test plans (ai-testing/)
 Tools/                  ← dev-only scripts, not compiled into the app (recall-prompt.swift)
 Config/                 ← Secrets.xcconfig (gitignored; see .example)
-DESIGN.md               ← the design-token / visual spec
+DESIGN.md               ← the web-era design token spec (see Docs/DESIGN-IOS.md for the iOS decisions)
 WALKTHROUGH.md          ← plain-English tour of the whole codebase
 ```
 
@@ -32,8 +43,10 @@ WALKTHROUGH.md          ← plain-English tour of the whole codebase
 | Screen or view | `Phi/Views/<Topic>/` (new topic folder if it's a new screen area) |
 | Observable state object | `Phi/Stores/` |
 | Plain data type | `Phi/Models/` |
-| Network/persistence client | `Phi/Services/` |
-| Prompt, persona, or AI logic | `Phi/AI/<Personas|Prompting|Recall>/` |
+| Supabase table or Storage access | `Phi/Services/Repositories/` |
+| Anthropic API call | `Phi/Services/Anthropic/` |
+| Prompt, persona, or AI logic | `Phi/AI/<Personas\|Prompting\|Lessons\|Tutor\|Recall>/` |
+| Preview-only sample data | `Phi/AI/Previews/` (inside `#if DEBUG`) |
 | Color, font, or brand element | `Phi/DesignSystem/` |
 | Dev script (not shipped) | `Tools/` |
 | Documentation | `Docs/` (or the relevant `*.md` at root) |
@@ -42,9 +55,10 @@ If a file could go two places, pick by *what it is*, not what it's for: a SwiftU
 
 ## Why this convention
 
-The code was already ~75% type/layer folders; finishing that beat converting everything to feature folders (`Features/Dashboard/…`) at this size (~25 Swift files, 5 screens). Revisit feature folders if the app passes ~15–20 screens — at that point "what does the app do?" becomes the better index than "what kind of file is this?".
+The code was already ~75% type/layer folders; finishing that beat converting everything to feature folders (`Features/Dashboard/…`) at this size. Revisit feature folders if the app passes ~15–20 screens — at that point "what does the app do?" becomes the better index than "what kind of file is this?".
 
 ## Mechanics worth knowing
 
 - The Xcode project uses **filesystem-synchronized groups** (`objectVersion 77`): moving a file on disk *is* the project edit. No pbxproj surgery, and a moved file cannot silently fall out of the target.
 - Move files with `git mv` (or plain `mv` + `git add`) so `git log --follow` keeps per-file history.
+- Secrets never live in the repo. The Supabase anon key comes from `Config/Secrets.xcconfig`; the user's Anthropic key lives in the Keychain on their device.

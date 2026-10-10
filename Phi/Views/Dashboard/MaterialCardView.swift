@@ -1,43 +1,41 @@
 import SwiftUI
 
-/// A single material card in the Dashboard's horizontal row. Its own file per
-/// Chunk 1's convention of giving repeated UI pieces a home of their own
-/// (same reasoning as `SpadeMark`).
-///
-/// Sizing and shape are literal spec, not preference:
-/// - 168 × 210 pt — "slightly taller than a square" (≈ 1 : 1.25).
-/// - `cornerRadius: 28, style: .continuous` — the `.continuous` (superellipse)
-///   corner is what reads as Spades sleekness and matches the app-icon
-///   construction in PRODUCT_DESIGN.md §14. A plain corner radius looks
-///   noticeably more generic here.
+/// One material in the library grid. The card is a single accessibility element
+/// that reads the title and the date it was imported.
 struct MaterialCardView: View {
     let material: Material
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 28, style: .continuous)
-            // TOKEN NOTE: Chunk 1's Colors ramp has no dedicated card/surface
-            // token, so per the prompt we fall back to the `--c-900`-equivalent
-            // (`.c900`) as a flat fill. No glass material yet — that's a design
-            // call flagged back to the Prompter, not silently finalized here.
-            .fill(Color.c900)
-            .frame(width: 168, height: 210)
-            .overlay(alignment: .bottomLeading) {
-                // Bottom-anchored title. Real textbook filenames are
-                // unpredictable in length, so this must clamp to two lines and
-                // tail-truncate rather than overflow the card.
-                Text(material.title)
-                    .phiFont(.body)
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(2)
-                    .truncationMode(.tail)
-                    .padding(16)
-            }
+        VStack(alignment: .leading, spacing: PhiSpacing.sm) {
+            Spacer(minLength: 0)
+
+            // Long file names clamp to two lines. The tail is cut, never the start.
+            Text(material.title)
+                .phiFont(.headline)
+                .foregroundStyle(Color.phiTextPrimary)
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
+                .truncationMode(.tail)
+
+            Text(dateText)
+                .phiFont(.caption)
+                .foregroundStyle(Color.phiTextSecondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 160, alignment: .leading)
+        .padding(PhiSpacing.lg)
+        .contentShape(RoundedRectangle(cornerRadius: PhiRadius.card, style: .continuous))
+        .phiCard()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(material.title), \(dateText)")
+    }
+
+    private var dateText: String {
+        material.createdAt.formatted(date: .abbreviated, time: .omitted)
     }
 }
 
 #Preview {
-    HStack(spacing: 16) {
+    HStack(spacing: PhiSpacing.lg) {
         MaterialCardView(material: Material(id: UUID(), title: "Calculus"))
         MaterialCardView(
             material: Material(
@@ -46,7 +44,8 @@ struct MaterialCardView: View {
             )
         )
     }
-    .padding()
+    .padding(PhiSpacing.lg)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color.c950)
+    .background(Color.phiBackground)
+    .preferredColorScheme(.dark)
 }

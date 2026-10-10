@@ -1,10 +1,9 @@
 import Foundation
 import Supabase
 
-/// The one configured Supabase client for the whole app — same single-source
-/// convention as Chunk 1's `OnboardingStore`, but a plain global `let` because
-/// `SupabaseClient` is `Sendable` and immutable here, so it needs no store
-/// wrapper and is safe to touch from any actor.
+/// The one configured Supabase client for the whole app. It is a plain global
+/// `let` because `SupabaseClient` is `Sendable` and immutable here, so it needs
+/// no store wrapper and is safe to touch from any actor.
 ///
 /// URL and anon key are read from the Info.plist, which is populated by
 /// build-setting substitution from the gitignored `Config/Secrets.xcconfig`

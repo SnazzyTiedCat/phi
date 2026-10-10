@@ -1,171 +1,260 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// The app's first screen and the spine everything else hangs off: a header, a
-/// horizontally paginated row of material cards (or a real empty state when
-/// there are none), and a profile/settings entry point.
+/// The library: the person's imported materials as cards, with import, open,
+/// and delete. Opening a card pushes its `Material` onto the root stack, and
+/// `RootView` routes that value to the reader.
 ///
-/// NO VIEWMODEL, ON PURPOSE — same reasoning as `ArrivalView` in Chunk 1. This
-/// screen renders store state and forwards a navigation value; there's no
-/// async work or testable business logic to isolate yet. A ViewModel here
-/// would be MVVM-for-its-own-sake. Real ones arrive with real import (Chunk 4).
-///
-/// The `MaterialStore` is injected through the initializer (defaulting to a
-/// fresh empty store) so the previews below can seed populated data without
-/// any debug toggle reaching the shipped binary.
+/// The store comes from the environment, injected by `RootView`. The screen
+/// renders store state and forwards the person's actions to it.
 struct DashboardView: View {
-    @State private var store: MaterialStore
+    @Environment(MaterialStore.self) private var store
 
-    /// Drives the placeholder settings sheet. Local, transient, view-owned —
-    /// textbook `@State`.
     @State private var showSettings = false
+    @State private var isImporterPresented = false
+    /// True while a picked file is read and uploaded.
+    @State private var isImporting = false
 
-    init(store: MaterialStore = MaterialStore()) {
-        _store = State(initialValue: store)
-    }
+    private let columns = [GridItem(.adaptive(minimum: 160, maximum: 220), spacing: PhiSpacing.lg)]
+
+    /// PDF, plain text, and Markdown. Markdown is left out if the system has no type for `.md`.
+    private static let importTypes: [UTType] = {
+        var types: [UTType] = [.pdf, .plainText]
+        // VERIFY: UTType(filenameExtension: "md") resolves on device. If it returns nil, .md files cannot be picked.
+        if let markdown = UTType(filenameExtension: "md") {
+            types.append(markdown)
+        }
+        return types
+    }()
 
     var body: some View {
         ZStack {
-            Color.c950.ignoresSafeArea() // DESIGN.md: always-dark app background.
+            Color.phiBackground.ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: PhiSpacing.lg) {
                 header
-                    .padding(.horizontal, 20)
 
-                if store.materials.isEmpty {
-                    emptyState
-                } else {
-                    cardRow
-                    Spacer(minLength: 0)
+                if isImporting {
+                    importingBanner
+                }
+
+                if let message = store.errorMessage {
+                    errorBanner(message)
+                }
+
+                ScrollView {
+                    libraryContent
+                        .frame(maxWidth: .infinity, alignment: .top)
+                }
+                .refreshable {
+                    await store.load()
                 }
             }
+            .padding(.horizontal, PhiSpacing.lg)
+            .padding(.top, PhiSpacing.sm)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .padding(.top, 8)
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                profileButton
-            }
-            #if DEBUG
-            // TEMPORARY Chunk 3 verification trigger — remove with the harness.
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Verify") {
-                    Task { await SupabaseVerificationHarness.run() }
+                Button {
+                    showSettings = true
+                } label: {
+                    Image(systemName: "person.crop.circle")
+                        .foregroundStyle(Color.phiTextPrimary)
                 }
-                .tint(.white)
+                .accessibilityLabel("Settings")
             }
-            #endif
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isImporterPresented = true
+                } label: {
+                    Image(systemName: "plus")
+                        .foregroundStyle(Color.phiTextPrimary)
+                }
+                .accessibilityLabel("Import material")
+                .disabled(isImporting)
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .fileImporter(
+            isPresented: $isImporterPresented,
+            allowedContentTypes: DashboardView.importTypes
+        ) { result in
+            handlePick(result)
         }
         .sheet(isPresented: $showSettings) {
             SettingsSheet()
+        }
+        // RootView's task resolves the identity. Load only once it is set, so the
+        // first fetch is not refused as "still connecting". The load runs again
+        // whenever the identity changes.
+        .task(id: IdentityStore.shared.currentUserID) {
+            guard IdentityStore.shared.currentUserID != nil else { return }
+            await store.load()
         }
     }
 
     // MARK: - Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Your Library")
-                .phiFont(.h1) // Chunk 1's headline-level type token.
-                .foregroundStyle(.white)
+        VStack(alignment: .leading, spacing: PhiSpacing.xs) {
+            Text("Library")
+                .phiFont(.title)
+                .foregroundStyle(Color.phiTextPrimary)
+                .accessibilityAddTraits(.isHeader)
 
-            // Caption only when there's something to count.
-            // TOKEN NOTE: the color is pinned by spec to the `--c-400`-equivalent
-            // (`.c400`). The *size* is not — Chunk 1's Typography defines only
-            // H1 / body / label, with no dedicated caption step, so `.phiBody`
-            // is the neutral secondary-text choice here. Flagged as a token gap.
             if !store.materials.isEmpty {
-                let count = store.materials.count
-                Text("\(count) material\(count == 1 ? "" : "s")")
+                Text(countText)
                     .phiFont(.body)
-                    .foregroundStyle(Color.c400)
+                    .foregroundStyle(Color.phiTextSecondary)
             }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var countText: String {
+        let count = store.materials.count
+        return "\(count) material\(count == 1 ? "" : "s")"
+    }
+
+    // MARK: - Library
+
+    @ViewBuilder
+    private var libraryContent: some View {
+        if !store.materials.isEmpty {
+            grid
+        } else if store.isLoading {
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .padding(.top, PhiSpacing.xxl)
+        } else if !isImporting {
+            emptyState
         }
     }
 
-    // MARK: - Populated state
-
-    private var cardRow: some View {
-        // iOS 17 paging APIs — no hand-rolled snap math. `.viewAligned` snaps
-        // each card to the leading edge; `.contentMargins(.horizontal, 20)`
-        // insets the scroll content so cards line up with the 20pt header
-        // padding while the ScrollView itself still bleeds edge to edge.
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 16) {
-                ForEach(store.materials) { material in
-                    NavigationLink(value: material) {
-                        MaterialCardView(material: material)
+    private var grid: some View {
+        LazyVGrid(columns: columns, spacing: PhiSpacing.lg) {
+            // The stagger stops at eight, so a card far down a long list does not wait to appear.
+            ForEach(Array(store.materials.enumerated()), id: \.element.id) { index, material in
+                NavigationLink(value: material) {
+                    MaterialCardView(material: material)
+                }
+                .buttonStyle(.plain)
+                .phiEntrance(delay: Double(min(index, 8)) * 0.06)
+                .contextMenu {
+                    Button(role: .destructive) {
+                        Task { await store.delete(material) }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
-                    // Without `.plain`, NavigationLink applies list-row styling
-                    // that visually breaks the card.
-                    .buttonStyle(.plain)
                 }
             }
-            .scrollTargetLayout()
         }
-        .scrollTargetBehavior(.viewAligned)
-        .contentMargins(.horizontal, 20, for: .scrollContent)
     }
-
-    // MARK: - Empty state
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            // TOKEN NOTE: dimmed mark uses the `--c-800`-equivalent (`.c800`)
-            // rather than a hardcoded opacity, per spec.
-            SpadeMark(size: 64, color: .c800)
-
-            Text("No materials yet.")
-                .phiFont(.body)
-                .foregroundStyle(Color.c400)
-        }
-        // Fill the space below the header and center within it. Deliberately no
-        // CTA button: import doesn't exist until Chunk 4, and a button that
-        // goes nowhere is worse than no button.
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        PhiEmptyState(
+            symbol: "doc.text",
+            title: "Add your first material",
+            message: "Import a PDF, .txt, or .md file to start a lesson from it.",
+            actionLabel: "Import material",
+            action: { isImporterPresented = true }
+        )
+        .padding(.top, PhiSpacing.xl)
     }
 
-    // MARK: - Toolbar / settings
+    // MARK: - Banners
 
-    private var profileButton: some View {
-        Button {
-            showSettings = true
-        } label: {
-            Image(systemName: "person.crop.circle")
-                // Monochrome chrome: the gold accent is reserved, and the
-                // AccentColor asset is empty (default would render system
-                // blue), so tint white to stay on-brand.
-                .foregroundStyle(.white)
+    private var importingBanner: some View {
+        HStack(spacing: PhiSpacing.md) {
+            ProgressView()
+            Text("Importing your file")
+                .phiFont(.body)
+                .foregroundStyle(Color.phiTextSecondary)
         }
-        // An SF Symbol isn't self-describing to VoiceOver; name what it does.
-        .accessibilityLabel("Settings")
+        .padding(PhiSpacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .phiCard()
+        .accessibilityElement(children: .combine)
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: PhiSpacing.md) {
+            Image(systemName: "exclamationmark.circle")
+                .foregroundStyle(Color.phiError)
+                .accessibilityHidden(true)
+
+            Text(message)
+                .phiFont(.body)
+                .foregroundStyle(Color.phiTextPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                store.errorMessage = nil
+            } label: {
+                Image(systemName: "xmark")
+                    .foregroundStyle(Color.phiTextSecondary)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Dismiss message")
+        }
+        .padding(PhiSpacing.lg)
+        .phiCard()
+    }
+
+    // MARK: - Import
+
+    /// Routes the picker's result. Cancelling the picker is not an error.
+    @MainActor
+    private func handlePick(_ result: Result<URL, Error>) {
+        switch result {
+        case .success(let url):
+            Task { await importPicked(url) }
+        case .failure(let error):
+            // VERIFY: the picker reports a cancel as CocoaError.userCancelled.
+            if (error as? CocoaError)?.code == .userCancelled { return }
+            store.errorMessage = "Phi couldn't open that file. Try again."
+        }
+    }
+
+    @MainActor
+    private func importPicked(_ url: URL) async {
+        isImporting = true
+        defer { isImporting = false }
+        do {
+            // The store opens and closes the file's security scope itself, so it is not started here.
+            _ = try await store.importFile(at: url)
+            PhiHaptics.success()
+        } catch {
+            // The store has set errorMessage, and the banner shows it.
+            PhiHaptics.error()
+        }
     }
 }
 
-// Two preview variants exercise both layout branches. The empty case is the
-// shipped reality this chunk; the seeded case checks real-world truncation on
-// titles of varying length (not just tidy placeholder strings).
-
+#if DEBUG
 #Preview("Empty") {
     NavigationStack {
         DashboardView()
     }
+    .environment(MaterialStore.preview(materials: []))
     .preferredColorScheme(.dark)
 }
 
 #Preview("Populated") {
-    let store = MaterialStore()
-    store.materials = [
+    NavigationStack {
+        DashboardView()
+            .navigationDestination(for: Material.self) { material in
+                TutoringView(material: material)
+            }
+    }
+    .environment(MaterialStore.preview(materials: [
         Material(id: UUID(), title: "Calculus"),
         Material(id: UUID(), title: "Organic Chemistry: Reactions and Mechanisms of Carbonyl Compounds"),
         Material(id: UUID(), title: "Physics 101"),
         Material(id: UUID(), title: "Introduction to Macroeconomics and Global Trade Policy"),
         Material(id: UUID(), title: "Linear Algebra")
-    ]
-    return NavigationStack {
-        DashboardView(store: store)
-            .navigationDestination(for: Material.self) { material in
-                TutoringView(material: material)
-            }
-    }
+    ]))
     .preferredColorScheme(.dark)
 }
+#endif
